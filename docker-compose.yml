@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    ports:
+      - 1111:5432
+    environment:
+      POSTGRES_DB: orpud_proj
+      POSTGRES_USER: orpud_proj
+      POSTGRES_PASSWORD: orpud_proj
+    volumes:
+      - "db:/var/lib/postgresql/data"
+
+volumes:
+  db:

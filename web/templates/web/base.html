@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+
+<html>
+    <head>
+        <title>orpud project final</title>
+    </head>
+    <body>
+    <h1><a href="{% url 'main' %}">News feed</a></h1>
+        <nav>
+            <a href="{% url 'main' %}">Главная</a>
+            {% if user.is_anonymous %}
+                <a href="{% url 'registration' %}">Регистрация</a>
+                <a href="{% url 'auth' %}">Авторизация</a>
+            {% endif %}
+            <div style="text-align: right">
+                {% if not user.is_anonymous %}
+                    Вы авторизованы как <b>{{ user.username }}</b>
+                    <a href="{% url 'logout' %}">Выход</a>
+                {% endif %}
+            </div>
+        </nav>
+
+        <hr>
+        {% block content %} {% endblock %}
+    </body>
+</html>

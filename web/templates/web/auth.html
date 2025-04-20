@@ -1,0 +1,9 @@
+{% extends 'web/base.html' %}
+{% block content %}
+  <h2>Авторизация</h2>
+  <form action="" method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button>Войти</button>
+  </form>
+{% endblock %}
