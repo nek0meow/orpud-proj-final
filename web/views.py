@@ -2,6 +2,9 @@ from django.contrib.auth import logout, authenticate, login
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
 from django.http import HttpResponseRedirect, JsonResponse
+from django.core.paginator import Paginator
+from django.utils import timezone
+from datetime import timedelta
 
 from web.forms import RegistrationForm, AuthForm
 from web.models import User, Article, Interest, Source
@@ -12,15 +15,69 @@ from .serializers import ArticleSerializer
 from .recommender import NewsRecommender
 
 def main_view(request):
+    # Get all articles
+    articles = Article.objects.all()
+    
+    # Get available tags
+    available_tags = Interest.objects.all()
+    
+    # Apply filters
+    sort = request.GET.get('sort', 'date_desc')
+    date_range = request.GET.get('date_range', 'all')
+    selected_tags = request.GET.getlist('tags')
+    
+    # Date range filter
+    if date_range != 'all':
+        now = timezone.now()
+        if date_range == 'today':
+            articles = articles.filter(published_at__date=now.date())
+        elif date_range == 'week':
+            articles = articles.filter(published_at__gte=now - timedelta(days=7))
+        elif date_range == 'month':
+            articles = articles.filter(published_at__gte=now - timedelta(days=30))
+    
+    # Tags filter
+    if selected_tags:
+        try:
+            # Convert string IDs to integers
+            tag_ids = [int(tag_id) for tag_id in selected_tags]
+            articles = articles.filter(interests__id__in=tag_ids).distinct()
+        except (ValueError, TypeError):
+            # If there's an error in conversion, ignore the filter
+            pass
+    
+    # If user is authenticated, use recommender
     if request.user.is_authenticated:
-        # Use the recommender for authenticated users
         recommender = NewsRecommender()
         articles = recommender.get_recommendations(request.user)
-    else:
-        # For non-authenticated users, show recent articles
-        articles = Article.objects.all().order_by('-published_at')[:10]
     
-    return render(request, "web/main.html", {"articles": articles})
+    # Sort articles
+    if sort == 'date_asc':
+        articles = articles.order_by('published_at')
+    elif sort == 'relevance':
+        # For now, just sort by date. Later we'll implement relevance scoring
+        articles = articles.order_by('-published_at')
+    else:  # date_desc
+        articles = articles.order_by('-published_at')
+    
+    # Pagination
+    paginator = Paginator(articles, 12)  # Show 12 articles per page
+    page_number = request.GET.get('page', 1)
+    articles = paginator.get_page(page_number)
+
+    # DEBUG: добавим к каждой статье список id интересов
+    for article in articles:
+        article.interest_ids = list(article.interests.values_list('id', flat=True))
+
+    context = {
+        'articles': articles,
+        'available_tags': available_tags,
+        'selected_tags': selected_tags,
+        'current_sort': sort,
+        'current_date_range': date_range,
+    }
+    
+    return render(request, 'web/main.html', context)
 
 def registration_view(request):
     form = RegistrationForm()

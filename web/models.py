@@ -66,7 +66,6 @@ class Article(models.Model):
     def __str__(self):
         return self.title
 
-# избранное??
 class SavedArticle(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     article = models.ForeignKey(Article, on_delete=models.CASCADE)
@@ -75,7 +74,10 @@ class SavedArticle(models.Model):
     class Meta:
         unique_together = ('user', 'article')
         ordering = ['-saved_at']
-        
+
+    def __str__(self):
+        return f"{self.user.username} - {self.article.title}"
+
 class UserInteraction(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     article = models.ForeignKey(Article, on_delete=models.CASCADE)
@@ -84,3 +86,5 @@ class UserInteraction(models.Model):
     duration = models.IntegerField(default=0)  # Time spent in seconds
     score = models.FloatField(default=0.0)  # Calculated interest score
     
+    def __str__(self):
+        return f"{self.user.username} - {self.article.title} ({self.interaction_type})"
