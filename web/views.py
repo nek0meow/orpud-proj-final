@@ -15,9 +15,6 @@ from .serializers import ArticleSerializer
 from .recommender import NewsRecommender
 
 def main_view(request):
-    # Get all articles
-    articles = Article.objects.all()
-    
     # Get available tags
     available_tags = Interest.objects.all()
     
@@ -26,46 +23,61 @@ def main_view(request):
     date_range = request.GET.get('date_range', 'all')
     selected_tags = request.GET.getlist('tags')
     
-    # Date range filter
-    if date_range != 'all':
-        now = timezone.now()
-        if date_range == 'today':
-            articles = articles.filter(published_at__date=now.date())
-        elif date_range == 'week':
-            articles = articles.filter(published_at__gte=now - timedelta(days=7))
-        elif date_range == 'month':
-            articles = articles.filter(published_at__gte=now - timedelta(days=30))
-    
-    # Tags filter
-    if selected_tags:
-        try:
-            # Convert string IDs to integers
-            tag_ids = [int(tag_id) for tag_id in selected_tags]
-            articles = articles.filter(interests__id__in=tag_ids).distinct()
-        except (ValueError, TypeError):
-            # If there's an error in conversion, ignore the filter
-            pass
-    
     # If user is authenticated, use recommender
     if request.user.is_authenticated:
         recommender = NewsRecommender()
-        articles = recommender.get_recommendations(request.user)
-    
-    # Sort articles
-    if sort == 'date_asc':
-        articles = articles.order_by('published_at')
-    elif sort == 'relevance':
-        # For now, just sort by date. Later we'll implement relevance scoring
-        articles = articles.order_by('-published_at')
-    else:  # date_desc
-        articles = articles.order_by('-published_at')
+        recommended_articles = recommender.get_recommendations(request.user)
+        # Get article IDs and scores from recommendations
+        article_data = {article['id']: article['score'] for article in recommended_articles}
+        article_ids = list(article_data.keys())
+        
+        # Get Article objects and maintain recommendation order
+        articles = Article.objects.filter(id__in=article_ids)
+        id_order = {id: idx for idx, id in enumerate(article_ids)}
+        articles = sorted(articles, key=lambda x: id_order[x.id])
+        
+        # Add relevance scores to articles
+        for article in articles:
+            article.score = article_data[article.id]
+    else:
+        # Get all articles
+        articles = Article.objects.all()
+        
+        # Date range filter
+        if date_range != 'all':
+            now = timezone.now()
+            if date_range == 'today':
+                articles = articles.filter(published_at__date=now.date())
+            elif date_range == 'week':
+                articles = articles.filter(published_at__gte=now - timedelta(days=7))
+            elif date_range == 'month':
+                articles = articles.filter(published_at__gte=now - timedelta(days=30))
+        
+        # Tags filter
+        if selected_tags:
+            try:
+                # Convert string IDs to integers
+                tag_ids = [int(tag_id) for tag_id in selected_tags]
+                articles = articles.filter(interests__id__in=tag_ids).distinct()
+            except (ValueError, TypeError):
+                # If there's an error in conversion, ignore the filter
+                pass
+        
+        # Sort articles
+        if sort == 'date_asc':
+            articles = articles.order_by('published_at')
+        elif sort == 'relevance':
+            # For non-authenticated users, sort by recency
+            articles = articles.order_by('-published_at')
+        else:  # date_desc
+            articles = articles.order_by('-published_at')
     
     # Pagination
     paginator = Paginator(articles, 12)  # Show 12 articles per page
     page_number = request.GET.get('page', 1)
     articles = paginator.get_page(page_number)
 
-    # DEBUG: добавим к каждой статье список id интересов
+    # Add interest IDs to each article
     for article in articles:
         article.interest_ids = list(article.interests.values_list('id', flat=True))
 

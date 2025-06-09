@@ -8,7 +8,7 @@ router = DefaultRouter()
 router.register(r'articles', views.ArticleViewSet)
 
 urlpatterns = [
-    path("", views.main, name="main"),
+    path("", views.main_view, name="main"),
     path("registration/", views.registration_view, name="registration"),
     path("auth/", views.auth_view, name="auth"),
     path("logout/", views.logout_view, name="logout"),

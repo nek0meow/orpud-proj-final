@@ -2,6 +2,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from datetime import datetime, timedelta
+from django.utils import timezone
 from .models import Article, UserProfile, UserInteraction
 
 class NewsRecommender:
@@ -46,9 +47,9 @@ class NewsRecommender:
         user_interests = self._get_user_interests(user)
         
         # Get all articles
-        articles = Article.objects.all()
+        articles = list(Article.objects.all())  # Convert QuerySet to list
         
-        if not articles.exists():
+        if not articles:
             return []
         
         # Get article features
@@ -67,8 +68,12 @@ class NewsRecommender:
             similarity_scores = np.zeros(len(articles))
         
         # Add recency factor
-        now = datetime.now()
+        now = timezone.now()
         for i, article in enumerate(articles):
+            # Ensure article.published_at is timezone-aware
+            if timezone.is_naive(article.published_at):
+                article.published_at = timezone.make_aware(article.published_at)
+            
             # Calculate recency score (higher for newer articles)
             days_old = (now - article.published_at).days
             recency_score = 1.0 / (1.0 + days_old)
@@ -81,8 +86,9 @@ class NewsRecommender:
         recommendations = []
         
         for idx in top_indices:
-            article = articles[idx]
+            article = articles[int(idx)]  # Convert numpy.int64 to Python int
             recommendations.append({
+                'id': article.id,  # Add article ID
                 'title': article.title,
                 'content': article.content,
                 'url': article.url,
