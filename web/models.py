@@ -17,6 +17,7 @@ class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     interests = models.ManyToManyField(Interest, blank=True)
     custom_tags = models.JSONField(default=list, blank=True)  # Для пользовательских тегов
+    telegram_id = models.BigIntegerField(unique=True, null=True, blank=True)
 
     def __str__(self):
         return f"{self.user.username}'s profile"
@@ -60,7 +61,7 @@ class Article(models.Model):
 
 # избранное??
 class SavedArticle(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(UserProfile, on_delete=models.CASCADE)
     article = models.ForeignKey(Article, on_delete=models.CASCADE)
     saved_at = models.DateTimeField(auto_now_add=True)
 
@@ -69,4 +70,4 @@ class SavedArticle(models.Model):
         ordering = ['-saved_at']
 
     def __str__(self):
-        return f"{self.user.username} - {self.article.title}"
+        return f"{self.user.user.username} - {self.article.title}"

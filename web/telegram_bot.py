@@ -11,6 +11,7 @@ from web.models import Article, Interest, UserProfile, SavedArticle
 from django.utils import timezone
 from datetime import timedelta
 from asgiref.sync import sync_to_async
+from django.contrib.auth.models import User
 
 # Настройка логирования
 logging.basicConfig(
@@ -58,8 +59,85 @@ def get_tag_articles_with_tags(tag_id):
     return result
 
 @sync_to_async
+def get_or_create_user_profile(user_id):
+    try:
+        user_profile = UserProfile.objects.get(telegram_id=user_id)
+        return user_profile
+    except UserProfile.DoesNotExist:
+        username = f"telegram_{user_id}"
+        try:
+            user = User.objects.get(username=username)
+            # Проверяем, нет ли уже профиля с этим пользователем
+            try:
+                user_profile = UserProfile.objects.get(user=user)
+                # Если есть, обновляем telegram_id
+                user_profile.telegram_id = user_id
+                user_profile.save()
+                return user_profile
+            except UserProfile.DoesNotExist:
+                pass
+        except User.DoesNotExist:
+            user = User.objects.create_user(username=username, password=None)
+        user_profile = UserProfile.objects.create(user=user, telegram_id=user_id)
+        return user_profile
+
+@sync_to_async
+def add_favorite(user_id, article_id):
+    try:
+        user_profile = UserProfile.objects.get(telegram_id=user_id)
+    except UserProfile.DoesNotExist:
+        username = f"telegram_{user_id}"
+        try:
+            user = User.objects.get(username=username)
+            try:
+                user_profile = UserProfile.objects.get(user=user)
+                user_profile.telegram_id = user_id
+                user_profile.save()
+            except UserProfile.DoesNotExist:
+                user_profile = UserProfile.objects.create(user=user, telegram_id=user_id)
+        except User.DoesNotExist:
+            user = User.objects.create_user(username=username, password=None)
+            user_profile = UserProfile.objects.create(user=user, telegram_id=user_id)
+    article = Article.objects.get(id=article_id)
+    SavedArticle.objects.get_or_create(user=user_profile, article=article)
+
+@sync_to_async
+def remove_favorite(user_id, article_id):
+    try:
+        user_profile = UserProfile.objects.get(telegram_id=user_id)
+    except UserProfile.DoesNotExist:
+        username = f"telegram_{user_id}"
+        try:
+            user = User.objects.get(username=username)
+            try:
+                user_profile = UserProfile.objects.get(user=user)
+                user_profile.telegram_id = user_id
+                user_profile.save()
+            except UserProfile.DoesNotExist:
+                user_profile = UserProfile.objects.create(user=user, telegram_id=user_id)
+        except User.DoesNotExist:
+            user = User.objects.create_user(username=username, password=None)
+            user_profile = UserProfile.objects.create(user=user, telegram_id=user_id)
+    SavedArticle.objects.filter(user=user_profile, article_id=article_id).delete()
+
+@sync_to_async
 def get_user_favorites_with_tags(user_id):
-    saved = SavedArticle.objects.filter(user=user_id).order_by('-saved_at')[:5]
+    try:
+        user_profile = UserProfile.objects.get(telegram_id=user_id)
+    except UserProfile.DoesNotExist:
+        username = f"telegram_{user_id}"
+        try:
+            user = User.objects.get(username=username)
+            try:
+                user_profile = UserProfile.objects.get(user=user)
+                user_profile.telegram_id = user_id
+                user_profile.save()
+            except UserProfile.DoesNotExist:
+                user_profile = UserProfile.objects.create(user=user, telegram_id=user_id)
+        except User.DoesNotExist:
+            user = User.objects.create_user(username=username, password=None)
+            user_profile = UserProfile.objects.create(user=user, telegram_id=user_id)
+    saved = SavedArticle.objects.filter(user=user_profile).order_by('-saved_at')[:5]
     result = []
     for s in saved:
         article = s.article
@@ -73,15 +151,6 @@ def get_user_favorites_with_tags(user_id):
             "id": article.id,
         })
     return result
-
-@sync_to_async
-def add_favorite(user_id, article_id):
-    article = Article.objects.get(id=article_id)
-    SavedArticle.objects.get_or_create(user=user_id, article=article)
-
-@sync_to_async
-def remove_favorite(user_id, article_id):
-    SavedArticle.objects.filter(user=user_id, article_id=article_id).delete()
 
 # Команды бота
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
