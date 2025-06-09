@@ -31,3 +31,11 @@ class SavedArticle(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     article = models.ForeignKey(Article, on_delete=models.CASCADE)
     saved_at = models.DateTimeField(auto_now_add=True)
+
+class UserInteraction(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    article = models.ForeignKey(Article, on_delete=models.CASCADE)
+    interaction_type = models.CharField(max_length=50)  # 'view', 'read', 'click', etc.
+    interaction_time = models.DateTimeField(auto_now_add=True)
+    duration = models.IntegerField(default=0)  # Time spent in seconds
+    score = models.FloatField(default=0.0)  # Calculated interest score
