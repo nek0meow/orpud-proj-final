@@ -1,16 +1,143 @@
 {% extends 'web/base.html' %}
+
+{% block title %}News Feed - News Aggregator{% endblock %}
+
 {% block content %}
-    <h1>Лента статей</h1>
-    {% if articles %}
-        <ul>
-        {% for article in articles %}
-            <li>
-                <a href="{{ article.url }}" target="_blank">{{ article.title }}</a><br>
-                <small>{{ article.source.name }} | {{ article.published_at|date:'d.m.Y H:i' }}</small>
-            </li>
-        {% endfor %}
-        </ul>
-    {% else %}
-        <p>Нет статей</p>
-    {% endif %}
+<div class="row">
+    <div class="col-12 mb-4">
+        <h2 class="display-5 fw-bold text-center mb-4">Latest News</h2>
+        {% if user.is_authenticated and user.profile.interests.exists %}
+            <p class="text-center text-muted">Showing news based on your interests</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <form method="get" class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Sort by</label>
+                        <select name="sort" class="form-select">
+                            <option value="date_desc" {% if current_sort == 'date_desc' %}selected{% endif %}>Newest First</option>
+                            <option value="date_asc" {% if current_sort == 'date_asc' %}selected{% endif %}>Oldest First</option>
+                            <option value="relevance" {% if current_sort == 'relevance' %}selected{% endif %}>Most Relevant</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Date Range</label>
+                        <select name="date_range" class="form-select">
+                            <option value="all" {% if current_date_range == 'all' %}selected{% endif %}>All Time</option>
+                            <option value="today" {% if current_date_range == 'today' %}selected{% endif %}>Today</option>
+                            <option value="week" {% if current_date_range == 'week' %}selected{% endif %}>This Week</option>
+                            <option value="month" {% if current_date_range == 'month' %}selected{% endif %}>This Month</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Tags</label>
+                        <select name="tags" class="form-select" multiple>
+                            {% for tag in available_tags %}
+                                <option value="{{ tag.id }}" {% if tag.id|stringformat:"s" in selected_tags %}selected{% endif %}>
+                                    {{ tag.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-filter me-1"></i>Apply Filters
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Articles -->
+<div class="row">
+    {% for article in articles %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card article-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="source-badge">{{ article.source.name }}</span>
+                    <span class="date-badge">
+                        <i class="far fa-clock me-1"></i>
+                        {{ article.published_at|date:"M d, Y" }}
+                    </span>
+                </div>
+                <h5 class="card-title">{{ article.title }}</h5>
+                <p class="card-text text-muted">{{ article.content|truncatewords:30 }}</p>
+                {% if article.interests.exists %}
+                <div class="mb-3">
+                    {% for interest in article.interests.all %}
+                    <span class="badge bg-secondary me-1">{{ interest.name }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <a href="{{ article.url }}" target="_blank" class="btn btn-primary mt-3">
+                    <i class="fas fa-external-link-alt me-1"></i>Read More
+                </a>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12">
+        <div class="alert alert-info text-center">
+            <i class="fas fa-info-circle me-2"></i>No articles available at the moment.
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Pagination -->
+{% if articles.has_other_pages %}
+<div class="row mt-4">
+    <div class="col-12">
+        <nav aria-label="Page navigation">
+            <ul class="pagination justify-content-center">
+                {% if articles.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ articles.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                </li>
+                {% endif %}
+
+                {% for num in articles.paginator.page_range %}
+                <li class="page-item {% if articles.number == num %}active{% endif %}">
+                    <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                        {{ num }}
+                    </a>
+                </li>
+                {% endfor %}
+
+                {% if articles.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ articles.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Initialize select2 for tags
+    $(document).ready(function() {
+        $('select[name="tags"]').select2({
+            placeholder: "Select tags",
+            allowClear: true,
+            theme: "bootstrap-5"
+        });
+    });
+</script>
 {% endblock %}

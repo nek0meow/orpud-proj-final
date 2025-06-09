@@ -8,16 +8,16 @@ router = DefaultRouter()
 router.register(r'articles', views.ArticleViewSet)
 
 urlpatterns = [
-    path("", views.main_view, name="main"),
-    path("registration/", views.registration_view, name='registration'),
-    path("auth/", views.auth_view, name='auth'),
-    path("logout/", views.logout_view, name='logout'),
+    path("", views.main, name="main"),
+    path("registration/", views.registration_view, name="registration"),
+    path("auth/", views.auth_view, name="auth"),
+    path("logout/", views.logout_view, name="logout"),
     path("profile/", views.profile_view, name="profile"),
     # API endpoints:
-    path("api/profile/", UserProfileDetailAPI.as_view(), name="api-profile"),
-    path("api/interests/", InterestListAPI.as_view(), name="api-interests"),
-    path("api/profile/set_interests/", SetUserInterestsAPI.as_view(), name="api-set-interests"),
-    path("api/profile/set_custom_tags/", SetUserCustomTagsAPI.as_view(), name="api-set-custom-tags"),
-    path('api/', include(router.urls)),
+    path("api/", include(router.urls)),
+    path("api/profile/", UserProfileDetailAPI.as_view(), name="api_profile"),
+    path("api/interests/", InterestListAPI.as_view(), name="api_interests"),
+    path("api/set-interests/", SetUserInterestsAPI.as_view(), name="api_set_interests"),
+    path("api/set-custom-tags/", SetUserCustomTagsAPI.as_view(), name="api_set_custom_tags"),
     # path("edit_categories", edit_categories_view, name='edit_categories'),
 ]

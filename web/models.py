@@ -67,3 +67,6 @@ class SavedArticle(models.Model):
     class Meta:
         unique_together = ('user', 'article')
         ordering = ['-saved_at']
+
+    def __str__(self):
+        return f"{self.user.username} - {self.article.title}"

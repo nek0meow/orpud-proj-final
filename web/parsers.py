@@ -12,13 +12,43 @@ class BaseParser:
         raise NotImplementedError
 
     def format_article(self, title, content, url, published_at, source_name):
+        # Простой алгоритм определения тегов на основе ключевых слов
+        tags = []
+        keywords = {
+            'technology': ['tech', 'technology', 'software', 'hardware', 'ai', 'artificial intelligence', 'machine learning', 'computer', 'digital', 'internet', 'cyber', 'data', 'app', 'mobile', 'startup', 'gadget', 'device', 'programming', 'code', 'developer', 'innovation'],
+            'science': ['science', 'research', 'study', 'discovery', 'scientific', 'experiment', 'scientist', 'lab', 'university', 'academic', 'theory', 'physics', 'chemistry', 'biology', 'medicine', 'medical', 'health', 'disease', 'treatment', 'covid', 'vaccine', 'virus', 'genetic', 'dna', 'space', 'astronomy', 'climate', 'environment'],
+            'business': ['business', 'economy', 'market', 'stock', 'finance', 'trading', 'company', 'corporate', 'investment', 'bank', 'money', 'dollar', 'euro', 'profit', 'revenue', 'industry', 'commerce', 'trade', 'economic', 'financial', 'business', 'enterprise', 'startup', 'venture', 'funding'],
+            'sports': ['sport', 'football', 'basketball', 'tennis', 'olympics', 'game', 'match', 'player', 'team', 'league', 'championship', 'tournament', 'coach', 'score', 'win', 'loss', 'athlete', 'competition', 'soccer', 'baseball', 'hockey', 'golf', 'racing', 'fitness', 'training'],
+            'entertainment': ['movie', 'film', 'music', 'celebrity', 'entertainment', 'actor', 'actress', 'director', 'show', 'concert', 'theater', 'performance', 'artist', 'album', 'song', 'tv', 'television', 'series', 'drama', 'comedy', 'entertainment', 'media', 'celebrity', 'star', 'famous'],
+            'health': ['health', 'medical', 'disease', 'treatment', 'covid', 'doctor', 'hospital', 'patient', 'medicine', 'drug', 'vaccine', 'symptom', 'diagnosis', 'therapy', 'wellness', 'fitness', 'nutrition', 'diet', 'exercise', 'mental health', 'psychology', 'counseling', 'therapy'],
+            'politics': ['politics', 'government', 'election', 'president', 'congress', 'democrat', 'republican', 'policy', 'law', 'bill', 'vote', 'campaign', 'party', 'minister', 'political', 'administration', 'policy', 'legislation', 'diplomacy', 'international', 'foreign', 'domestic']
+        }
+        
+        text = f"{title} {content}".lower()
+        word_count = len(text.split())
+        
+        # Считаем количество совпадений для каждого тега
+        tag_scores = {}
+        for tag, words in keywords.items():
+            matches = sum(1 for word in words if word in text)
+            if matches > 0:
+                # Нормализуем по длине текста и количеству ключевых слов
+                score = matches / (word_count * len(words))
+                tag_scores[tag] = score
+        
+        # Берем теги с наибольшим скором
+        if tag_scores:
+            max_score = max(tag_scores.values())
+            # Снизим порог для включения тега
+            tags = [tag for tag, score in tag_scores.items() if score >= max_score * 0.3]
+        
         return {
             "title": title,
             "content": content,
             "source": source_name,
             "published_at": published_at.isoformat(),
             "url": url,
-            "interests": []  # Будет заполняться ML моделью позже
+            "tags": tags
         }
 
 class NewsAPIParser(BaseParser):
@@ -28,11 +58,7 @@ class NewsAPIParser(BaseParser):
             'country': 'us',
             'apiKey': settings.NEWS_API_KEY  # Берем ключ из settings
         }
-        print(f"NewsAPI request URL: {url}")
-        print(f"NewsAPI params: {params}")
         response = requests.get(url, params=params)
-        print(f"NewsAPI response status: {response.status_code}")
-        print(f"NewsAPI response: {response.text[:500]}")  # Первые 500 символов ответа
         if response.status_code == 200:
             data = response.json()
             articles = []
@@ -46,7 +72,7 @@ class NewsAPIParser(BaseParser):
                     source_name=self.source.name
                 )
                 articles.append(formatted)
-                Article.objects.get_or_create(
+                article_obj, created = Article.objects.get_or_create(
                     url=article['url'],
                     defaults={
                         'title': article['title'],
@@ -55,6 +81,9 @@ class NewsAPIParser(BaseParser):
                         'source': self.source
                     }
                 )
+                if created:
+                    # Set interests after creation
+                    article_obj.interests.set(Interest.objects.filter(name__in=formatted['tags']))
             return {"articles": articles}
 
 class GNewsParser(BaseParser):
@@ -65,11 +94,7 @@ class GNewsParser(BaseParser):
             'token': self.api_key,
             'lang': 'en'
         }
-        print(f"GNews request URL: {url}")
-        print(f"GNews params: {params}")
         response = requests.get(url, params=params)
-        print(f"GNews response status: {response.status_code}")
-        print(f"GNews response: {response.text[:500]}")  # Первые 500 символов ответа
         if response.status_code == 200:
             data = response.json()
             articles = []
@@ -83,7 +108,7 @@ class GNewsParser(BaseParser):
                     source_name=self.source.name
                 )
                 articles.append(formatted)
-                Article.objects.get_or_create(
+                article_obj, created = Article.objects.get_or_create(
                     url=article['url'],
                     defaults={
                         'title': article['title'],
@@ -92,6 +117,9 @@ class GNewsParser(BaseParser):
                         'source': self.source
                     }
                 )
+                if created:
+                    # Set interests after creation
+                    article_obj.interests.set(Interest.objects.filter(name__in=formatted['tags']))
             return {"articles": articles}
 
 class MediastackParser(BaseParser):
@@ -116,7 +144,7 @@ class MediastackParser(BaseParser):
                     source_name=self.source.name
                 )
                 articles.append(formatted)
-                Article.objects.get_or_create(
+                article_obj, created = Article.objects.get_or_create(
                     url=article['url'],
                     defaults={
                         'title': article['title'],
@@ -125,6 +153,9 @@ class MediastackParser(BaseParser):
                         'source': self.source
                     }
                 )
+                if created:
+                    # Set interests after creation
+                    article_obj.interests.set(Interest.objects.filter(name__in=formatted['tags']))
             return {"articles": articles}
 
 class GuardianParser(BaseParser):
@@ -149,7 +180,7 @@ class GuardianParser(BaseParser):
                     source_name=self.source.name
                 )
                 articles.append(formatted)
-                Article.objects.get_or_create(
+                article_obj, created = Article.objects.get_or_create(
                     url=article['webUrl'],
                     defaults={
                         'title': article['webTitle'],
@@ -158,6 +189,9 @@ class GuardianParser(BaseParser):
                         'source': self.source
                     }
                 )
+                if created:
+                    # Set interests after creation
+                    article_obj.interests.set(Interest.objects.filter(name__in=formatted['tags']))
             return {"articles": articles}
 
 class CurrentsParser(BaseParser):
@@ -182,7 +216,7 @@ class CurrentsParser(BaseParser):
                     source_name=self.source.name
                 )
                 articles.append(formatted)
-                Article.objects.get_or_create(
+                article_obj, created = Article.objects.get_or_create(
                     url=article['url'],
                     defaults={
                         'title': article['title'],
@@ -191,6 +225,9 @@ class CurrentsParser(BaseParser):
                         'source': self.source
                     }
                 )
+                if created:
+                    # Set interests after creation
+                    article_obj.interests.set(Interest.objects.filter(name__in=formatted['tags']))
             return {"articles": articles}
 
 PARSERS = {

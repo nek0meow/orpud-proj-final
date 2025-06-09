@@ -133,3 +133,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # NewsAPI settings
 NEWS_API_KEY = os.environ.get('NEWS_API_KEY', '23495ad2015c408c9b6fc7a4eaf1e172')
+
+# Telegram Bot settings
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8153321610:AAEQAJ7hp3S0-qzbT4COGAVPrMy19LskWoA')
