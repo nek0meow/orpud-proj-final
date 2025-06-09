@@ -84,7 +84,7 @@ DATABASES = {
         "NAME": os.environ.get("DB_NAME", "orpud_proj"),
         "USER": os.environ.get("DB_USER", "orpud_proj"),
         "PASSWORD": os.environ.get("DB_PASSWORD", "orpud_proj"),
-        "HOST": os.environ.get("DB_HOST", "localhost"),
+        "HOST": os.environ.get("DB_HOST", "0.0.0.0"),
         "PORT": 1111,
     }
 }

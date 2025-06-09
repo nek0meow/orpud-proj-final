@@ -12,6 +12,8 @@ from django.utils import timezone
 from datetime import timedelta
 from asgiref.sync import sync_to_async
 from django.contrib.auth.models import User
+from .recommender import NewsRecommender
+import asyncio
 
 # Настройка логирования
 logging.basicConfig(
@@ -67,10 +69,8 @@ def get_or_create_user_profile(user_id):
         username = f"telegram_{user_id}"
         try:
             user = User.objects.get(username=username)
-            # Проверяем, нет ли уже профиля с этим пользователем
             try:
                 user_profile = UserProfile.objects.get(user=user)
-                # Если есть, обновляем telegram_id
                 user_profile.telegram_id = user_id
                 user_profile.save()
                 return user_profile
@@ -151,6 +151,164 @@ def get_user_favorites_with_tags(user_id):
             "id": article.id,
         })
     return result
+
+@sync_to_async
+def enable_notifications_for_user(user_id):
+    try:
+        user_profile = UserProfile.objects.get(telegram_id=user_id)
+    except UserProfile.DoesNotExist:
+        username = f"telegram_{user_id}"
+        try:
+            user = User.objects.get(username=username)
+            try:
+                user_profile = UserProfile.objects.get(user=user)
+                user_profile.telegram_id = user_id
+            except UserProfile.DoesNotExist:
+                user_profile = UserProfile.objects.create(user=user, telegram_id=user_id)
+        except User.DoesNotExist:
+            user = User.objects.create_user(username=username, password=None)
+            user_profile = UserProfile.objects.create(user=user, telegram_id=user_id)
+    user_profile.notifications_enabled = True
+    user_profile.save()
+    return user_profile
+
+@sync_to_async
+def disable_notifications_for_user(user_id):
+    try:
+        user_profile = UserProfile.objects.get(telegram_id=user_id)
+    except UserProfile.DoesNotExist:
+        username = f"telegram_{user_id}"
+        try:
+            user = User.objects.get(username=username)
+            try:
+                user_profile = UserProfile.objects.get(user=user)
+                user_profile.telegram_id = user_id
+            except UserProfile.DoesNotExist:
+                user_profile = UserProfile.objects.create(user=user, telegram_id=user_id)
+        except User.DoesNotExist:
+            user = User.objects.create_user(username=username, password=None)
+            user_profile = UserProfile.objects.create(user=user, telegram_id=user_id)
+    user_profile.notifications_enabled = False
+    user_profile.save()
+    return user_profile
+
+@sync_to_async
+def get_users_with_notifications():
+    return UserProfile.objects.filter(notifications_enabled=True)
+
+async def send_notification_to_user(bot, user_profile, message):
+    """Отправляет уведомление пользователю"""
+    try:
+        await bot.send_message(
+            chat_id=user_profile.telegram_id,
+            text=message,
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logger.error(f"Failed to send notification to user {user_profile.telegram_id}: {e}")
+
+async def notify_users_about_new_article(bot, article):
+    """Отправляет уведомление всем пользователям с включенными уведомлениями о новой статье"""
+    users = await get_users_with_notifications()
+    message = (
+        f"📰 *Новая статья!*\n\n"
+        f"*{article.title}*\n\n"
+        f"{article.content[:200]}...\n\n"
+        f"🏷 Теги: {', '.join([i.name for i in article.interests.all()])}\n"
+        f"🔗 [Читать статью]({article.url})"
+    )
+    for user_profile in users:
+        await send_notification_to_user(bot, user_profile, message)
+
+@sync_to_async
+def get_user_interests(user_id):
+    try:
+        user_profile = UserProfile.objects.get(telegram_id=user_id)
+        return list(user_profile.interests.all())
+    except UserProfile.DoesNotExist:
+        return []
+
+@sync_to_async
+def get_all_interests():
+    return list(Interest.objects.all())
+
+@sync_to_async
+def add_interest_to_user(user_id, interest_id):
+    try:
+        user_profile = UserProfile.objects.get(telegram_id=user_id)
+        interest = Interest.objects.get(id=interest_id)
+        user_profile.interests.add(interest)
+        return True
+    except (UserProfile.DoesNotExist, Interest.DoesNotExist):
+        return False
+
+@sync_to_async
+def remove_interest_from_user(user_id, interest_id):
+    try:
+        user_profile = UserProfile.objects.get(telegram_id=user_id)
+        interest = Interest.objects.get(id=interest_id)
+        user_profile.interests.remove(interest)
+        return True
+    except (UserProfile.DoesNotExist, Interest.DoesNotExist):
+        return False
+
+async def my_tags(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает теги пользователя и позволяет их редактировать"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Получаем все доступные теги
+    all_interests = await get_all_interests()
+    # Получаем теги пользователя
+    user_interests = await get_user_interests(query.from_user.id)
+    user_interest_ids = {i.id for i in user_interests}
+    
+    # Создаем кнопки для каждого тега
+    keyboard = []
+    for interest in all_interests:
+        if interest.id in user_interest_ids:
+            # Если тег уже выбран, добавляем кнопку для удаления
+            keyboard.append([InlineKeyboardButton(f"❌ {interest.name}", callback_data=f'remove_interest_{interest.id}')])
+        else:
+            # Если тег не выбран, добавляем кнопку для добавления
+            keyboard.append([InlineKeyboardButton(f"➕ {interest.name}", callback_data=f'add_interest_{interest.id}')])
+    
+    # Добавляем кнопку "Назад"
+    keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data='settings')])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.message.edit_text(
+        "🏷 Ваши интересы:\n\n"
+        "Выберите теги, которые вас интересуют.\n"
+        "Вы будете получать уведомления только о статьях с этими тегами.",
+        reply_markup=reply_markup
+    )
+
+async def add_interest(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Добавляет тег в интересы пользователя"""
+    query = update.callback_query
+    await query.answer()
+    
+    interest_id = query.data.split('_')[2]
+    success = await add_interest_to_user(query.from_user.id, interest_id)
+    
+    if success:
+        await my_tags(update, context)  # Обновляем список тегов
+    else:
+        await query.message.reply_text("❌ Не удалось добавить тег. Попробуйте позже.")
+
+async def remove_interest(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Удаляет тег из интересов пользователя"""
+    query = update.callback_query
+    await query.answer()
+    
+    interest_id = query.data.split('_')[2]
+    success = await remove_interest_from_user(query.from_user.id, interest_id)
+    
+    if success:
+        await my_tags(update, context)  # Обновляем список тегов
+    else:
+        await query.message.reply_text("❌ Не удалось удалить тег. Попробуйте позже.")
 
 # Команды бота
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -293,6 +451,53 @@ async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
+async def notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает настройки уведомлений"""
+    query = update.callback_query
+    await query.answer()
+    
+    keyboard = [
+        [InlineKeyboardButton("🔔 Включить уведомления", callback_data='enable_notifications')],
+        [InlineKeyboardButton("🔕 Отключить уведомления", callback_data='disable_notifications')],
+        [InlineKeyboardButton("◀️ Назад", callback_data='settings')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.message.edit_text(
+        "🔔 Настройки уведомлений:\n\n"
+        "• Получать уведомления о новых статьях\n"
+        "• Получать уведомления о важных новостях\n"
+        "• Получать уведомления о сохраненных статьях",
+        reply_markup=reply_markup
+    )
+
+async def enable_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Включает уведомления"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_profile = await enable_notifications_for_user(query.from_user.id)
+    
+    await query.message.edit_text(
+        "✅ Уведомления включены!\n\n"
+        "Вы будете получать уведомления о:\n"
+        "• Новых статьях\n"
+        "• Важных новостях\n"
+        "• Сохраненных статьях"
+    )
+
+async def disable_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отключает уведомления"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_profile = await disable_notifications_for_user(query.from_user.id)
+    
+    await query.message.edit_text(
+        "✅ Уведомления отключены!\n\n"
+        "Вы больше не будете получать уведомления."
+    )
+
 async def add_to_favorites(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Добавляет статью в избранное"""
     query = update.callback_query
@@ -331,24 +536,58 @@ async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
+async def get_recommendations(update, context):
+    """Получает рекомендации статей для пользователя"""
+    try:
+        # Получаем профиль пользователя
+        user_profile = UserProfile.objects.get(telegram_id=update.effective_user.id)
+        
+        # Получаем рекомендации
+        recommender = NewsRecommender()
+        recommendations = recommender.get_recommendations(user_profile)
+        
+        if not recommendations:
+            await update.message.reply_text("К сожалению, не удалось найти статьи по вашим интересам 😔")
+            return
+        
+        # Отправляем рекомендации
+        for article in recommendations:
+            message = (
+                f"📰 *{article['title']}*\n\n"
+                f"{article['content'][:200]}...\n\n"
+                f"🏷 Теги: {', '.join(article['tags'])}\n"
+                f"📅 Опубликовано: {article['published_at'].strftime('%d.%m.%Y %H:%M')}\n"
+                f"🔗 [Читать статью]({article['url']})"
+            )
+            
+            await update.message.reply_text(
+                text=message,
+                parse_mode='Markdown',
+                disable_web_page_preview=True
+            )
+            
+            # Небольшая задержка между сообщениями
+            await asyncio.sleep(1)
+    
+    except UserProfile.DoesNotExist:
+        await update.message.reply_text("Пожалуйста, сначала выберите свои интересы в настройках.")
+    except Exception as e:
+        logger.error(f"Error getting recommendations: {e}")
+        await update.message.reply_text("Произошла ошибка при получении рекомендаций 😔")
+
 def main():
-    """Запуск бота"""
+    """Запускает бота"""
     # Создаем приложение
-    token = os.getenv('TELEGRAM_BOT_TOKEN', '8153321610:AAEQAJ7hp3S0-qzbT4COGAVPrMy19LskWoA')
-    application = Application.builder().token(token).build()
+    application = Application.builder().token(os.getenv('TELEGRAM_BOT_TOKEN', '8153321610:AAEQAJ7hp3S0-qzbT4COGAVPrMy19LskWoA')).build()
     
     # Добавляем обработчики
-    logger.info("Registering handlers...")
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(latest_news, pattern='^latest_news$'))
-    application.add_handler(CallbackQueryHandler(show_tags, pattern='^tags$'))
-    application.add_handler(CallbackQueryHandler(show_tag_news, pattern='^tag_'))
-    application.add_handler(CallbackQueryHandler(favorites, pattern='^favorites$'))
-    application.add_handler(CallbackQueryHandler(settings, pattern='^settings$'))
-    application.add_handler(CallbackQueryHandler(add_to_favorites, pattern='^favorite_'))
-    application.add_handler(CallbackQueryHandler(remove_from_favorites, pattern='^unfavorite_'))
-    application.add_handler(CallbackQueryHandler(back_to_main, pattern='^back_to_main$'))
-    logger.info("Handlers registered successfully")
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("settings", settings))
+    application.add_handler(CommandHandler("my_tags", my_tags))
+    application.add_handler(CommandHandler("add_interest", add_interest))
+    application.add_handler(CommandHandler("remove_interest", remove_interest))
+    application.add_handler(CommandHandler("recommend", get_recommendations))
     
     # Запускаем бота
     application.run_polling()

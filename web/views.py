@@ -5,6 +5,7 @@ from django.http import HttpResponseRedirect
 from django.core.paginator import Paginator
 from django.utils import timezone
 from datetime import timedelta
+from django.contrib import messages
 
 from web.forms import RegistrationForm, AuthForm
 from web.models import User, Article, Interest, Source
@@ -12,6 +13,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from .serializers import ArticleSerializer
+from .recommender import NewsRecommender
 
 def main(request):
     # Get all articles
@@ -35,12 +37,30 @@ def main(request):
         elif date_range == 'month':
             articles = articles.filter(published_at__gte=now - timedelta(days=30))
     
-    # Tags filter
+    # Tags filter with relevance scoring
     if selected_tags:
         try:
             # Convert string IDs to integers
             tag_ids = [int(tag_id) for tag_id in selected_tags]
-            articles = articles.filter(interests__id__in=tag_ids).distinct()
+            filtered_articles = articles.filter(interests__id__in=tag_ids).distinct()
+            
+            # Get user profile if authenticated
+            if request.user.is_authenticated:
+                user_profile = request.user.profile
+                recommender = NewsRecommender()
+                
+                # Get recommendations for filtered articles
+                articles_with_scores = []
+                for article in filtered_articles:
+                    score = recommender.get_article_score(user_profile, article)
+                    articles_with_scores.append((article, score))
+                
+                # Sort by relevance score
+                articles_with_scores.sort(key=lambda x: x[1], reverse=True)
+                articles = [article for article, _ in articles_with_scores]
+            else:
+                articles = filtered_articles
+                
         except (ValueError, TypeError):
             # If there's an error in conversion, ignore the filter
             pass
@@ -49,8 +69,8 @@ def main(request):
     if sort == 'date_asc':
         articles = articles.order_by('published_at')
     elif sort == 'relevance':
-        # For now, just sort by date. Later we'll implement relevance scoring
-        articles = articles.order_by('-published_at')
+        # Already sorted by relevance if tags are selected
+        pass
     else:  # date_desc
         articles = articles.order_by('-published_at')
     
@@ -143,3 +163,21 @@ class ArticleViewSet(viewsets.ReadOnlyModelViewSet):
         articles = self.get_queryset()
         serializer = self.get_serializer(articles, many=True)
         return Response({"articles": serializer.data})
+
+def get_recommendations(request):
+    """Получает рекомендации статей для пользователя"""
+    if not request.user.is_authenticated:
+        return redirect('auth')
+    
+    try:
+        user_profile = request.user.profile
+        recommender = NewsRecommender()
+        recommendations = recommender.get_recommendations(user_profile)
+        
+        return render(request, 'web/recommendations.html', {
+            'recommendations': recommendations,
+            'user_profile': user_profile
+        })
+    except Exception as e:
+        messages.error(request, f"Ошибка при получении рекомендаций: {e}")
+        return redirect('main')

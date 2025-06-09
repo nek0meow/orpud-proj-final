@@ -13,6 +13,7 @@ urlpatterns = [
     path("auth/", views.auth_view, name="auth"),
     path("logout/", views.logout_view, name="logout"),
     path("profile/", views.profile_view, name="profile"),
+    path('recommendations/', views.get_recommendations, name='recommendations'),
     # API endpoints:
     path("api/", include(router.urls)),
     path("api/profile/", UserProfileDetailAPI.as_view(), name="api_profile"),

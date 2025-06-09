@@ -20,4 +20,17 @@
 {% if profile.custom_tags %}
     <p><b>Твои теги:</b> {{ profile.custom_tags|join:', ' }}</p>
 {% endif %}
+<div class="card mb-4">
+    <div class="card-body">
+        <h5 class="card-title">Ваши интересы</h5>
+        <div class="mb-3">
+            {% for interest in user_profile.interests.all %}
+                <span class="badge bg-primary me-1">{{ interest.name }}</span>
+            {% endfor %}
+        </div>
+        <a href="{% url 'recommendations' %}" class="btn btn-primary">
+            Подобрать статьи
+        </a>
+    </div>
+</div>
 {% endblock %} 
