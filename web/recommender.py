@@ -1,41 +1,45 @@
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
-from .models import Article, UserProfile, UserInteraction, Category
+from datetime import datetime, timedelta
+from .models import Article, UserProfile, UserInteraction
 
 class NewsRecommender:
     def __init__(self):
-        self.vectorizer = TfidfVectorizer(stop_words='english')
-        
+        self.vectorizer = TfidfVectorizer(
+            max_features=5000,
+            stop_words='english',
+            ngram_range=(1, 2)
+        )
+
     def _get_user_interests(self, user):
-        """Get user's interests based on their profile and interactions"""
-        # Get explicit preferences
-        preferences = UserProfile.objects.get(user=user).preferences.all()
-        preference_categories = [cat.name for cat in preferences]
+        """Get user interests from profile and interactions"""
+        interests = []
         
-        # Get implicit preferences from interactions
+        # Get explicit interests from profile
+        if hasattr(user, 'profile'):
+            profile = user.profile
+            interests.extend(profile.interests.values_list('name', flat=True))
+            interests.extend(profile.custom_tags)
+        
+        # Get implicit interests from interactions
         interactions = UserInteraction.objects.filter(user=user)
-        interaction_scores = {}
-        
         for interaction in interactions:
-            category = interaction.article.category.name
-            if category not in interaction_scores:
-                interaction_scores[category] = 0
-            interaction_scores[category] += interaction.score
-            
-        # Combine explicit and implicit preferences
-        interests = set(preference_categories)
-        for category, score in interaction_scores.items():
-            if score > 0.5:  # Threshold for considering implicit interest
-                interests.add(category)
-                
-        return list(interests)
-    
+            if interaction.score > 0.5:  # Only consider positive interactions
+                interests.extend(interaction.article.tags)
+        
+        return list(set(interests))  # Remove duplicates
+
     def _get_article_features(self, articles):
         """Extract features from articles for similarity comparison"""
-        texts = [f"{article.name} {article.category.name}" for article in articles]
+        texts = []
+        for article in articles:
+            # Combine title and content for better feature extraction
+            text = f"{article.title} {article.content}"
+            texts.append(text)
+        
         return self.vectorizer.fit_transform(texts)
-    
+
     def get_recommendations(self, user, limit=10):
         """Get personalized news recommendations for a user"""
         # Get user interests
@@ -44,37 +48,47 @@ class NewsRecommender:
         # Get all articles
         articles = Article.objects.all()
         
-        # Filter articles by user interests
-        relevant_articles = [
-            article for article in articles 
-            if article.category.name in user_interests
-        ]
-        
-        if not relevant_articles:
+        if not articles.exists():
             return []
-            
-        # Get article features
-        features = self._get_article_features(relevant_articles)
         
-        # Calculate similarity scores
-        similarity_matrix = cosine_similarity(features)
+        # Get article features
+        article_features = self._get_article_features(articles)
+        
+        # If user has interests, calculate similarity
+        if user_interests:
+            # Create a document from user interests
+            user_doc = ' '.join(user_interests)
+            user_features = self.vectorizer.transform([user_doc])
+            
+            # Calculate similarity scores
+            similarity_scores = cosine_similarity(user_features, article_features).flatten()
+        else:
+            # If no interests, use recency as the main factor
+            similarity_scores = np.zeros(len(articles))
+        
+        # Add recency factor
+        now = datetime.now()
+        for i, article in enumerate(articles):
+            # Calculate recency score (higher for newer articles)
+            days_old = (now - article.published_at).days
+            recency_score = 1.0 / (1.0 + days_old)
+            
+            # Combine similarity and recency scores
+            similarity_scores[i] = 0.7 * similarity_scores[i] + 0.3 * recency_score
         
         # Get top recommendations
-        article_scores = []
-        for i, article in enumerate(relevant_articles):
-            # Calculate average similarity with other articles
-            avg_similarity = np.mean(similarity_matrix[i])
-            article_scores.append((article, avg_similarity))
-            
-        # Sort by score and return top recommendations
-        article_scores.sort(key=lambda x: x[1], reverse=True)
-        recommendations = article_scores[:limit]
+        top_indices = similarity_scores.argsort()[-limit:][::-1]
+        recommendations = []
         
-        # Format results
-        return [{
-            'header': article.name,
-            'category': article.category.name,
-            'link': article.link,
-            'date': article.date.isoformat(),
-            'score': float(score)
-        } for article, score in recommendations] 
+        for idx in top_indices:
+            article = articles[idx]
+            recommendations.append({
+                'title': article.title,
+                'content': article.content,
+                'url': article.url,
+                'source': article.source.name,
+                'published_at': article.published_at,
+                'score': float(similarity_scores[idx])
+            })
+        
+        return recommendations 

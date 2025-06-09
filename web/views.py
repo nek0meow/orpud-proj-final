@@ -1,7 +1,7 @@
 from django.contrib.auth import logout, authenticate, login
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
 
 from web.forms import RegistrationForm, AuthForm
 from web.models import User, Article, Interest, Source
@@ -9,16 +9,17 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from .serializers import ArticleSerializer
+from .recommender import NewsRecommender
 
 def main_view(request):
     if request.user.is_authenticated:
-        interests = request.user.profile.interests.all()
-        if interests.exists():
-            articles = Article.objects.filter(interests__in=interests).distinct()
-        else:
-            articles = Article.objects.all()
+        # Use the recommender for authenticated users
+        recommender = NewsRecommender()
+        articles = recommender.get_recommendations(request.user)
     else:
-        articles = Article.objects.all()
+        # For non-authenticated users, show recent articles
+        articles = Article.objects.all().order_by('-published_at')[:10]
+    
     return render(request, "web/main.html", {"articles": articles})
 
 def registration_view(request):
@@ -27,17 +28,14 @@ def registration_view(request):
         form = RegistrationForm(data=request.POST)
         if form.is_valid():
             user = User(
-                username=form.cleaned_data["username"], email=form.cleaned_data["email"]
+                username=form.cleaned_data["username"],
+                email=form.cleaned_data["email"]
             )
-
             user.set_password(form.cleaned_data["password"])
             user.save()
             return redirect("main")
 
-    return render(
-        request, "web/registration.html", {"form": form}
-    )
-
+    return render(request, "web/registration.html", {"form": form})
 
 def auth_view(request):
     form = AuthForm()
@@ -51,9 +49,7 @@ def auth_view(request):
                 login(request, user)
                 return redirect("main")
 
-    print("fdfdfdfd")
     return render(request, "web/auth.html", {"form": form})
-
 
 @login_required
 def logout_view(request):
@@ -91,3 +87,13 @@ class ArticleViewSet(viewsets.ReadOnlyModelViewSet):
         articles = self.get_queryset()
         serializer = self.get_serializer(articles, many=True)
         return Response({"articles": serializer.data})
+
+    @action(detail=False, methods=['get'])
+    def recommendations(self, request):
+        """Получить персонализированные рекомендации"""
+        if not request.user.is_authenticated:
+            return Response({"error": "Authentication required"}, status=401)
+        
+        recommender = NewsRecommender()
+        recommendations = recommender.get_recommendations(request.user)
+        return Response({"articles": recommendations})

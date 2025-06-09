@@ -41,12 +41,20 @@ class Source(models.Model):
     def __str__(self):
         return self.name
 
+class Category(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+    
+    def __str__(self):
+        return self.name
+
 class Article(models.Model):
     title = models.CharField(max_length=512)
     content = models.TextField()
     url = models.URLField(max_length=512)
     published_at = models.DateTimeField()
     source = models.ForeignKey(Source, on_delete=models.CASCADE)
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, null=True, blank=True)
     interests = models.ManyToManyField(Interest, blank=True)
     tags = models.JSONField(default=list, blank=True)  # Теги, определенные ML моделью
     created_at = models.DateTimeField(auto_now_add=True)
@@ -64,7 +72,10 @@ class SavedArticle(models.Model):
     article = models.ForeignKey(Article, on_delete=models.CASCADE)
     saved_at = models.DateTimeField(auto_now_add=True)
 
-<<<<<<< HEAD
+    class Meta:
+        unique_together = ('user', 'article')
+        ordering = ['-saved_at']
+        
 class UserInteraction(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     article = models.ForeignKey(Article, on_delete=models.CASCADE)
@@ -72,8 +83,4 @@ class UserInteraction(models.Model):
     interaction_time = models.DateTimeField(auto_now_add=True)
     duration = models.IntegerField(default=0)  # Time spent in seconds
     score = models.FloatField(default=0.0)  # Calculated interest score
-=======
-    class Meta:
-        unique_together = ('user', 'article')
-        ordering = ['-saved_at']
->>>>>>> origin/toha
+    

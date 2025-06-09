@@ -2,15 +2,63 @@
 {% block content %}
     <h1>Лента статей</h1>
     {% if articles %}
-        <ul>
-        {% for article in articles %}
-            <li>
-                <a href="{{ article.url }}" target="_blank">{{ article.title }}</a><br>
-                <small>{{ article.source.name }} | {{ article.published_at|date:'d.m.Y H:i' }}</small>
-            </li>
-        {% endfor %}
-        </ul>
+        <div class="articles-list">
+            {% for article in articles %}
+                <div class="article-card">
+                    <h2><a href="{{ article.url }}" target="_blank">{{ article.title }}</a></h2>
+                    <p class="article-meta">
+                        <span class="source">{{ article.source }}</span> | 
+                        <span class="date">{{ article.published_at|date:'d.m.Y H:i' }}</span>
+                    </p>
+                    <p class="article-content">{{ article.content|truncatewords:50 }}</p>
+                    {% if article.score %}
+                        <div class="relevance-score">
+                            Релевантность: {{ article.score|floatformat:2 }}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
     {% else %}
         <p>Нет статей</p>
     {% endif %}
+
+    <style>
+        .articles-list {
+            display: grid;
+            gap: 20px;
+            padding: 20px 0;
+        }
+        .article-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .article-card h2 {
+            margin: 0 0 10px 0;
+        }
+        .article-card h2 a {
+            color: #333;
+            text-decoration: none;
+        }
+        .article-card h2 a:hover {
+            color: #007bff;
+        }
+        .article-meta {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
+        .article-content {
+            color: #444;
+            line-height: 1.6;
+        }
+        .relevance-score {
+            margin-top: 10px;
+            color: #666;
+            font-size: 0.9em;
+        }
+    </style>
 {% endblock %}
