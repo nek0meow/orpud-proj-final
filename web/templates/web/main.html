@@ -4,131 +4,177 @@
 {% block title %}News Feed - News Aggregator{% endblock %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-8">
-    <!-- Filter Panel -->
-    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-        <h2 class="text-2xl font-bold mb-4">Filter Articles</h2>
-        
-        <!-- AI Recommendations Status -->
+<div class="row">
+    <div class="col-12 mb-4">
+        <h2 class="display-5 fw-bold text-center mb-4">Latest News</h2>
         {% if user.is_authenticated %}
-        <div class="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <h3 class="text-lg font-semibold text-blue-800 mb-2">AI Recommendations Active</h3>
-            <p class="text-blue-600">
-                Showing personalized recommendations based on your interests:
-                {% for interest in user.profile.interests.all %}
-                    <span class="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm mr-2 mb-2">{{ interest.name }}</span>
-                {% endfor %}
-                {% if user.profile.custom_tags %}
-                    <span class="block mt-2">Custom tags:</span>
-                    {% for tag in user.profile.custom_tags %}
-                        <span class="inline-block bg-green-100 text-green-800 px-2 py-1 rounded-full text-sm mr-2 mb-2">{{ tag }}</span>
+            <div class="alert alert-info text-center">
+                <h4 class="alert-heading">AI Recommendations Active</h4>
+                <p class="mb-0">
+                    Showing personalized recommendations based on your interests:
+                    {% for interest in user.profile.interests.all %}
+                        <span class="badge bg-primary me-1">{{ interest.name }}</span>
                     {% endfor %}
-                {% endif %}
-            </p>
-        </div>
+                    {% if user.profile.custom_tags %}
+                        <br>
+                        <span class="mt-2">Custom tags:</span>
+                        {% for tag in user.profile.custom_tags %}
+                            <span class="badge bg-success me-1">{{ tag }}</span>
+                        {% endfor %}
+                    {% endif %}
+                </p>
+            </div>
         {% endif %}
-
-        <form method="get" class="space-y-4">
-            <!-- Sort Options -->
-            <div class="mb-4">
-                <label class="block text-gray-700 text-sm font-bold mb-2">Sort By</label>
-                <select name="sort" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="date_desc" {% if current_sort == 'date_desc' %}selected{% endif %}>Newest First</option>
-                    <option value="date_asc" {% if current_sort == 'date_asc' %}selected{% endif %}>Oldest First</option>
-                    <option value="relevance" {% if current_sort == 'relevance' %}selected{% endif %}>Most Relevant</option>
-                </select>
-            </div>
-
-            <!-- Date Range -->
-            <div class="mb-4">
-                <label class="block text-gray-700 text-sm font-bold mb-2">Date Range</label>
-                <select name="date_range" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="all" {% if current_date_range == 'all' %}selected{% endif %}>All Time</option>
-                    <option value="today" {% if current_date_range == 'today' %}selected{% endif %}>Today</option>
-                    <option value="week" {% if current_date_range == 'week' %}selected{% endif %}>This Week</option>
-                    <option value="month" {% if current_date_range == 'month' %}selected{% endif %}>This Month</option>
-                </select>
-            </div>
-
-            <!-- Tags -->
-            <div class="mb-4">
-                <label class="block text-gray-700 text-sm font-bold mb-2">Filter by Tags</label>
-                <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    {% for tag in available_tags %}
-                    <label class="inline-flex items-center">
-                        <input type="checkbox" name="tags" value="{{ tag.id }}"
-                               class="form-checkbox h-5 w-5 text-blue-600"
-                               {% if tag.id|stringformat:"s" in selected_tags %}checked{% endif %}>
-                        <span class="ml-2 text-gray-700">{{ tag.name }}</span>
-                    </label>
-                    {% endfor %}
-                </div>
-            </div>
-
-            <!-- Apply Filters Button -->
-            <button type="submit" class="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition duration-200">
-                Apply Filters
-            </button>
-        </form>
     </div>
+</div>
 
-    <!-- Articles Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {% for article in articles %}
-        <div class="bg-white rounded-lg shadow-md overflow-hidden">
-            <div class="p-6">
-                <h3 class="text-xl font-semibold mb-2">
-                    <a href="{{ article.url }}" target="_blank" class="text-blue-600 hover:text-blue-800">
-                        {{ article.title }}
-                    </a>
-                </h3>
-                <p class="text-gray-600 mb-4">{{ article.content|truncatewords:30 }}</p>
-                <div class="flex justify-between items-center text-sm text-gray-500">
-                    <span>{{ article.source.name }}</span>
-                    <span>{{ article.published_at|date:"M d, Y" }}</span>
-                </div>
-                <!-- Article Tags -->
-                <div class="mt-4 flex flex-wrap gap-2">
-                    {% for interest in article.interests.all %}
-                    <span class="inline-block bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs">
-                        {{ interest.name }}
+<!-- Filters -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <form method="get" class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Sort by</label>
+                        <select name="sort" class="form-select">
+                            <option value="date_desc" {% if current_sort == 'date_desc' %}selected{% endif %}>Newest First</option>
+                            <option value="date_asc" {% if current_sort == 'date_asc' %}selected{% endif %}>Oldest First</option>
+                            <option value="relevance" {% if current_sort == 'relevance' %}selected{% endif %}>Most Relevant</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Date Range</label>
+                        <select name="date_range" class="form-select">
+                            <option value="all" {% if current_date_range == 'all' %}selected{% endif %}>All Time</option>
+                            <option value="today" {% if current_date_range == 'today' %}selected{% endif %}>Today</option>
+                            <option value="week" {% if current_date_range == 'week' %}selected{% endif %}>This Week</option>
+                            <option value="month" {% if current_date_range == 'month' %}selected{% endif %}>This Month</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Tags</label>
+                        <div class="border rounded p-2" style="max-height: 150px; overflow-y: auto;">
+                            {% for tag in available_tags %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="tags" value="{{ tag.id }}"
+                                       id="tag_{{ tag.id }}" {% if tag.id|stringformat:"s" in selected_tags %}checked{% endif %}>
+                                <label class="form-check-label" for="tag_{{ tag.id }}">
+                                    {{ tag.name }}
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-filter me-1"></i>Apply Filters
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Articles -->
+<div class="row">
+    {% for article in articles %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card article-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="source-badge">{{ article.source.name }}</span>
+                    <span class="date-badge">
+                        <i class="far fa-clock me-1"></i>
+                        {{ article.published_at|date:"M d, Y" }}
                     </span>
+                </div>
+                <h5 class="card-title">{{ article.title }}</h5>
+                <p class="card-text text-muted">{{ article.content|truncatewords:30 }}</p>
+                {% if article.interests.exists %}
+                <div class="mb-3">
+                    {% for interest in article.interests.all %}
+                    <span class="badge bg-secondary me-1">{{ interest.name }}</span>
                     {% endfor %}
                 </div>
+                {% endif %}
+                {% if article.score %}
+                <div class="relevance-score mb-3">
+                    <span class="badge bg-info">Relevance: {{ article.score|floatformat:2 }}</span>
+                </div>
+                {% endif %}
+                <a href="{{ article.url }}" target="_blank" class="btn btn-primary mt-3">
+                    <i class="fas fa-external-link-alt me-1"></i>Read More
+                </a>
             </div>
         </div>
-        {% empty %}
-        <div class="col-span-full text-center py-8">
-            <p class="text-gray-500">No articles found matching your criteria.</p>
-        </div>
-        {% endfor %}
     </div>
+    {% empty %}
+    <div class="col-12">
+        <div class="alert alert-info text-center">
+            <i class="fas fa-info-circle me-2"></i>No articles available at the moment.
+        </div>
+    </div>
+    {% endfor %}
+</div>
 
-    <!-- Pagination -->
-    {% if articles.has_other_pages %}
-    <div class="mt-8 flex justify-center">
-        <nav class="inline-flex rounded-md shadow">
-            {% if articles.has_previous %}
-            <a href="?page={{ articles.previous_page_number }}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if current_date_range %}&date_range={{ current_date_range }}{% endif %}{% for tag in selected_tags %}&tags={{ tag }}{% endfor %}"
-               class="px-3 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
-                Previous
-            </a>
-            {% endif %}
+<!-- Pagination -->
+{% if articles.has_other_pages %}
+<div class="row mt-4">
+    <div class="col-12">
+        <nav aria-label="Page navigation">
+            <ul class="pagination justify-content-center">
+                {% if articles.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ articles.previous_page_number }}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if current_date_range %}&date_range={{ current_date_range }}{% endif %}{% for tag in selected_tags %}&tags={{ tag }}{% endfor %}">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                </li>
+                {% endif %}
 
-            <span class="px-3 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
-                Page {{ articles.number }} of {{ articles.paginator.num_pages }}
-            </span>
+                <li class="page-item active">
+                    <span class="page-link">
+                        Page {{ articles.number }} of {{ articles.paginator.num_pages }}
+                    </span>
+                </li>
 
-            {% if articles.has_next %}
-            <a href="?page={{ articles.next_page_number }}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if current_date_range %}&date_range={{ current_date_range }}{% endif %}{% for tag in selected_tags %}&tags={{ tag }}{% endfor %}"
-               class="px-3 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
-                Next
-            </a>
-            {% endif %}
+                {% if articles.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ articles.next_page_number }}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if current_date_range %}&date_range={{ current_date_range }}{% endif %}{% for tag in selected_tags %}&tags={{ tag }}{% endfor %}">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
         </nav>
     </div>
-    {% endif %}
 </div>
+{% endif %}
+
+<style>
+    .article-card {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .article-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .source-badge {
+        background-color: #e9ecef;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.875rem;
+    }
+    .date-badge {
+        color: #6c757d;
+        font-size: 0.875rem;
+    }
+    .relevance-score {
+        font-size: 0.875rem;
+    }
+</style>
 {% endblock %}
 
 {% block extra_js %}

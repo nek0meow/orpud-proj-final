@@ -35,10 +35,12 @@ class NewsRecommender:
         """Extract features from articles for similarity comparison"""
         texts = []
         for article in articles:
-            # Combine title and content for better feature extraction
-            text = f"{article.title} {article.content}"
+            # Combine title, content, and tags for better feature extraction
+            article_tags = ' '.join(article.interests.values_list('name', flat=True))
+            text = f"{article.title} {article.content} {article_tags}"
             texts.append(text)
         
+        # Fit and transform the vectorizer on all articles
         return self.vectorizer.fit_transform(texts)
 
     def get_recommendations(self, user, limit=10):
@@ -59,10 +61,15 @@ class NewsRecommender:
         if user_interests:
             # Create a document from user interests
             user_doc = ' '.join(user_interests)
+            # Transform user interests using the same vectorizer
             user_features = self.vectorizer.transform([user_doc])
             
             # Calculate similarity scores
             similarity_scores = cosine_similarity(user_features, article_features).flatten()
+            
+            # Normalize similarity scores to 0-1 range
+            if similarity_scores.max() > 0:
+                similarity_scores = similarity_scores / similarity_scores.max()
         else:
             # If no interests, use recency as the main factor
             similarity_scores = np.zeros(len(articles))
@@ -78,8 +85,17 @@ class NewsRecommender:
             days_old = (now - article.published_at).days
             recency_score = 1.0 / (1.0 + days_old)
             
-            # Combine similarity and recency scores
-            similarity_scores[i] = 0.7 * similarity_scores[i] + 0.3 * recency_score
+            # Calculate interest match score
+            article_interests = set(article.interests.values_list('name', flat=True))
+            user_interest_set = set(user_interests)
+            interest_match = len(article_interests.intersection(user_interest_set)) / max(len(user_interest_set), 1)
+            
+            # Combine all factors
+            if user_interests:
+                # 50% content similarity, 30% interest match, 20% recency
+                similarity_scores[i] = 0.5 * similarity_scores[i] + 0.3 * interest_match + 0.2 * recency_score
+            else:
+                similarity_scores[i] = recency_score
         
         # Get top recommendations
         top_indices = similarity_scores.argsort()[-limit:][::-1]
@@ -88,7 +104,7 @@ class NewsRecommender:
         for idx in top_indices:
             article = articles[int(idx)]  # Convert numpy.int64 to Python int
             recommendations.append({
-                'id': article.id,  # Add article ID
+                'id': article.id,
                 'title': article.title,
                 'content': article.content,
                 'url': article.url,
