@@ -1,12 +1,25 @@
 from django.contrib.auth import logout, authenticate, login
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
+from django.http import HttpResponseRedirect
 
 from web.forms import RegistrationForm, AuthForm
-from web.models import User
+from web.models import User, Article, Interest, Source
+from rest_framework import viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from .serializers import ArticleSerializer
 
 def main_view(request):
-    return render(request,"web/main.html")
+    if request.user.is_authenticated:
+        interests = request.user.profile.interests.all()
+        if interests.exists():
+            articles = Article.objects.filter(interests__in=interests).distinct()
+        else:
+            articles = Article.objects.all()
+    else:
+        articles = Article.objects.all()
+    return render(request, "web/main.html", {"articles": articles})
 
 def registration_view(request):
     form = RegistrationForm()
@@ -46,3 +59,35 @@ def auth_view(request):
 def logout_view(request):
     logout(request)
     return redirect("main")
+
+@login_required
+def profile_view(request):
+    profile = request.user.profile
+    all_interests = Interest.objects.all()
+    if request.method == 'POST':
+        # Интересы
+        selected = request.POST.getlist('interests')
+        profile.interests.set(selected)
+        # Кастомные теги
+        tags = request.POST.get('custom_tags', '')
+        tags_list = [t.strip() for t in tags.split(',') if t.strip()]
+        profile.custom_tags = tags_list
+        profile.save()
+        return HttpResponseRedirect(request.path)
+    return render(request, 'web/profile.html', {
+        'profile': profile,
+        'all_interests': all_interests,
+        'selected_interests': profile.interests.values_list('id', flat=True),
+        'custom_tags': ', '.join(profile.custom_tags) if profile.custom_tags else ''
+    })
+
+class ArticleViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Article.objects.all().order_by('-published_at')
+    serializer_class = ArticleSerializer
+
+    @action(detail=False, methods=['get'])
+    def all_json(self, request):
+        """Получить все статьи в формате JSON"""
+        articles = self.get_queryset()
+        serializer = self.get_serializer(articles, many=True)
+        return Response({"articles": serializer.data})

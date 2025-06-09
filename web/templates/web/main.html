@@ -1,6 +1,16 @@
 {% extends 'web/base.html' %}
-<p> kldjfljkfjlkfjlk</p>
 {% block content %}
-    <h1>главная страничкааааааааааа</h1>
-    .\n.\n.\n.\n.\n.\n.\n.\n.\n
+    <h1>Лента статей</h1>
+    {% if articles %}
+        <ul>
+        {% for article in articles %}
+            <li>
+                <a href="{{ article.url }}" target="_blank">{{ article.title }}</a><br>
+                <small>{{ article.source.name }} | {{ article.published_at|date:'d.m.Y H:i' }}</small>
+            </li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>Нет статей</p>
+    {% endif %}
 {% endblock %}

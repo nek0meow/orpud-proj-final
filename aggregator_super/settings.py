@@ -38,7 +38,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'web'
+    'rest_framework',
+    'web',
 ]
 
 MIDDLEWARE = [
@@ -129,3 +130,6 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# NewsAPI settings
+NEWS_API_KEY = os.environ.get('NEWS_API_KEY', '23495ad2015c408c9b6fc7a4eaf1e172')

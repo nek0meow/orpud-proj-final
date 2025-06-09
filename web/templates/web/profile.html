@@ -1,0 +1,23 @@
+{% extends 'web/base.html' %}
+{% block content %}
+<h1>Личный кабинет</h1>
+<form method="post">
+    {% csrf_token %}
+    <h3>Интересы</h3>
+    {% for interest in all_interests %}
+        <label>
+            <input type="checkbox" name="interests" value="{{ interest.id }}" {% if interest.id in selected_interests %}checked{% endif %}>
+            {{ interest.name }}
+        </label><br>
+    {% empty %}
+        <p>Нет интересов</p>
+    {% endfor %}
+    <h3>Custom tags (через запятую)</h3>
+    <input type="text" name="custom_tags" value="{{ custom_tags }}" style="width: 400px;">
+    <br><br>
+    <button type="submit">Сохранить</button>
+</form>
+{% if profile.custom_tags %}
+    <p><b>Твои теги:</b> {{ profile.custom_tags|join:', ' }}</p>
+{% endif %}
+{% endblock %} 
