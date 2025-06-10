@@ -69,7 +69,7 @@ def main_view(request):
         
         # Add relevance scores to articles
         for article in articles:
-            article.score = article_data[article.id]
+            article.reference = article_data[article.id]
     else:
         # Get all articles
         articles = Article.objects.all()
@@ -102,6 +102,10 @@ def main_view(request):
             articles = articles.order_by('-published_at')
         else:  # date_desc
             articles = articles.order_by('-published_at')
+        
+        # Add default reference value for non-authenticated users
+        for article in articles:
+            article.reference = 0.0
     
     # Pagination
     paginator = Paginator(articles, 12)  # Show 12 articles per page
@@ -125,7 +129,7 @@ def main_view(request):
         'last_update': last_update_time,
     }
     
-    return render(request, 'web/main.html', context)
+    return render(request, 'web/index.html', context)
 
 def registration_view(request):
     form = RegistrationForm()

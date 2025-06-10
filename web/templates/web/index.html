@@ -1,0 +1,216 @@
+{% extends 'base/base.html' %}
+{% load static %}
+
+{% block title %}Новостной агрегатор{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <!-- Фильтры -->
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Фильтры</h5>
+                </div>
+                <div class="card-body">
+                    <form method="get" class="mb-3">
+                        <div class="mb-3">
+                            <label for="tags" class="form-label">Теги</label>
+                            <select name="tags" id="tags" class="form-select" multiple>
+                                {% for tag in available_tags %}
+                                <option value="{{ tag.id }}" {% if tag.id in selected_tags %}selected{% endif %}>
+                                    {{ tag.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="sort" class="form-label">Сортировка</label>
+                            <select name="sort" id="sort" class="form-select">
+                                <option value="newest" {% if current_sort == 'newest' %}selected{% endif %}>Сначала новые</option>
+                                <option value="oldest" {% if current_sort == 'oldest' %}selected{% endif %}>Сначала старые</option>
+                                <option value="relevance" {% if current_sort == 'relevance' %}selected{% endif %}>По релевантности</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Применить</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Список статей -->
+        <div class="col-md-9">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>Новости</h2>
+                <small class="text-muted">Последнее обновление: {{ last_update|date:"d.m.Y H:i" }}</small>
+            </div>
+
+            {% if is_updating %}
+            <div class="alert alert-info">
+                <i class="fas fa-sync fa-spin"></i> Обновление новостей...
+            </div>
+            {% endif %}
+
+            {% if articles %}
+            <div class="row">
+                {% for article in articles %}
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h5 class="card-title mb-0">
+                                    <a href="{{ article.url }}" target="_blank" class="text-decoration-none">
+                                        {{ article.title }}
+                                    </a>
+                                </h5>
+                                <span class="badge bg-primary">Релевантность: {{ article.reference|floatformat:2 }}</span>
+                            </div>
+                            <p class="card-text">{{ article.content|truncatewords:30 }}</p>
+                            <div class="mt-3">
+                                <div class="d-flex flex-wrap gap-2 mb-2">
+                                    {% for tag in article.interests.all %}
+                                    <a href="?tags={{ tag.id }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-tag me-1"></i>{{ tag.name }}
+                                    </a>
+                                    {% endfor %}
+                                </div>
+                                <small class="text-muted">{{ article.published_at|date:"d.m.Y H:i" }}</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Пагинация -->
+            {% if articles.has_other_pages %}
+            <nav aria-label="Page navigation" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if articles.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ articles.previous_page_number }}{% if selected_tags %}&tags={{ selected_tags|join:',' }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}" aria-label="Previous">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {% for num in articles.paginator.page_range %}
+                    {% if articles.number == num %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                    {% else %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ num }}{% if selected_tags %}&tags={{ selected_tags|join:',' }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}">{{ num }}</a>
+                    </li>
+                    {% endif %}
+                    {% endfor %}
+
+                    {% if articles.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ articles.next_page_number }}{% if selected_tags %}&tags={{ selected_tags|join:',' }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}" aria-label="Next">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+
+            <!-- График релевантности -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">График релевантности статей</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="relevanceChart"></canvas>
+                </div>
+            </div>
+
+            {% else %}
+            <div class="alert alert-info">
+                Нет доступных статей.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Подключаем Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Получаем данные для графика
+    const articles = [
+        {% for article in articles %}
+        {
+            title: "{{ article.title|escapejs }}",
+            url: "{{ article.url }}",
+            reference: {{ article.reference|default:"0" }}
+        }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ];
+
+    // Создаем график
+    const ctx = document.getElementById('relevanceChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: articles.map(article => article.title),
+            datasets: [{
+                label: 'Релевантность',
+                data: articles.map(article => article.reference),
+                backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `Релевантность: ${context.raw}`;
+                        },
+                        title: function(context) {
+                            const article = articles[context[0].dataIndex];
+                            return article.title;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Релевантность'
+                    }
+                },
+                x: {
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                }
+            },
+            onClick: function(event, elements) {
+                if (elements.length > 0) {
+                    const index = elements[0].index;
+                    window.open(articles[index].url, '_blank');
+                }
+            },
+            onHover: function(event, elements) {
+                event.native.target.style.cursor = elements.length ? 'pointer' : 'default';
+            }
+        }
+    });
+});
+</script>
+{% endblock %} 
