@@ -9,12 +9,14 @@
                     <h3 class="mb-0">Создать новую статью</h3>
                 </div>
                 <div class="card-body">
-                    <form method="post">
+                    <form method="post" novalidate>
                         {% csrf_token %}
                         
-                        {% if form.errors %}
+                        {% if form.non_field_errors %}
                         <div class="alert alert-danger">
-                            Пожалуйста, исправьте ошибки в форме.
+                            {% for error in form.non_field_errors %}
+                            {{ error }}
+                            {% endfor %}
                         </div>
                         {% endif %}
                         
@@ -23,9 +25,12 @@
                             {{ form.title }}
                             {% if form.title.errors %}
                             <div class="invalid-feedback d-block">
-                                {{ form.title.errors }}
+                                {% for error in form.title.errors %}
+                                {{ error }}
+                                {% endfor %}
                             </div>
                             {% endif %}
+                            <div class="form-text">Минимум 5 символов, максимум 200 символов</div>
                         </div>
                         
                         <div class="mb-3">
@@ -33,14 +38,21 @@
                             {{ form.content }}
                             {% if form.content.errors %}
                             <div class="invalid-feedback d-block">
-                                {{ form.content.errors }}
+                                {% for error in form.content.errors %}
+                                {{ error }}
+                                {% endfor %}
                             </div>
                             {% endif %}
+                            <div class="form-text">Минимум 50 символов</div>
                         </div>
                         
                         <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-primary">Опубликовать статью</button>
-                            <a href="{% url 'main' %}" class="btn btn-secondary">Отмена</a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>Опубликовать статью
+                            </button>
+                            <a href="{% url 'main' %}" class="btn btn-secondary">
+                                <i class="fas fa-times me-2"></i>Отмена
+                            </a>
                         </div>
                     </form>
                 </div>

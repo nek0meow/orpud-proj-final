@@ -55,15 +55,53 @@ def main_view(request):
     selected_tags = request.GET.getlist('tags')
     search_query = request.GET.get('search', '').strip()
     
-    # Base queryset
-    articles = Article.objects.all()
+    # Decode search query if it's URL encoded
+    import urllib.parse
+    search_query = urllib.parse.unquote(search_query)
+    print(f"Decoded search query: {search_query}")  # Debug log
+    
+    # Base queryset with select_related and prefetch_related
+    articles = Article.objects.select_related('source').prefetch_related('interests')
+    print(f"Initial article count: {articles.count()}")  # Debug log
     
     # Apply search filter if query exists
     if search_query:
+        print(f"Searching for: {search_query}")  # Debug log
+        # Force database refresh before search
+        from django.db import connection
+        connection.close()
+        
+        # Get fresh queryset
+        articles = Article.objects.select_related('source').prefetch_related('interests')
+        
+        # Debug: Print all articles before search
+        print("\nAll articles in database:")
+        for article in articles:
+            print(f"Article: {article.title} (ID: {article.id})")
+            print(f"Content: {article.content[:100]}...")  # Print first 100 chars of content
+        
+        # Apply search filter with case-insensitive search
         articles = articles.filter(
             Q(title__icontains=search_query) |
             Q(content__icontains=search_query)
         )
+        
+        print(f"\nFound {articles.count()} articles after search")  # Debug log
+        # Debug: print all matching articles with their content
+        print("\nMatching articles:")
+        for article in articles:
+            print(f"Found article: {article.title} (ID: {article.id})")
+            print(f"Content: {article.content[:100]}...")  # Print first 100 chars of content
+            
+            # Debug: Check if search query is in title or content
+            if search_query.lower() in article.title.lower():
+                print(f"Query found in title")
+            if search_query.lower() in article.content.lower():
+                print(f"Query found in content")
+        
+        # Store search results
+        search_results = list(articles)
+        print(f"Stored {len(search_results)} search results")  # Debug log
     
     # If user is authenticated, use recommender
     if request.user.is_authenticated:
@@ -73,47 +111,61 @@ def main_view(request):
         article_data = {article['id']: article['score'] for article in recommended_articles}
         article_ids = list(article_data.keys())
         
-        # Get Article objects and maintain recommendation order
-        articles = articles.filter(id__in=article_ids)
-        id_order = {id: idx for idx, id in enumerate(article_ids)}
-        articles = sorted(articles, key=lambda x: id_order[x.id])
+        if search_query:
+            # If we have search results, use them instead of recommendations
+            articles = search_results
+        else:
+            # Get Article objects and maintain recommendation order
+            articles = articles.filter(id__in=article_ids)
+            id_order = {id: idx for idx, id in enumerate(article_ids)}
+            articles = list(articles)  # Convert to list after filtering
+            articles = sorted(articles, key=lambda x: id_order[x.id])
         
         # Add relevance scores to articles
         for article in articles:
-            article.reference = article_data[article.id]
+            article.reference = article_data.get(article.id, 0.0)
     else:
-        # Date range filter
-        if date_range != 'all':
-            now = timezone.now()
-            if date_range == 'today':
-                articles = articles.filter(published_at__date=now.date())
-            elif date_range == 'week':
-                articles = articles.filter(published_at__gte=now - timedelta(days=7))
-            elif date_range == 'month':
-                articles = articles.filter(published_at__gte=now - timedelta(days=30))
-        
-        # Tags filter
-        if selected_tags:
-            try:
-                # Convert string IDs to integers
-                tag_ids = [int(tag_id) for tag_id in selected_tags]
-                articles = articles.filter(interests__id__in=tag_ids).distinct()
-            except (ValueError, TypeError):
-                # If there's an error in conversion, ignore the filter
-                pass
-        
-        # Sort articles
-        if sort == 'date_asc':
-            articles = articles.order_by('published_at')
-        elif sort == 'relevance':
-            # For non-authenticated users, sort by recency
-            articles = articles.order_by('-published_at')
-        else:  # date_desc
-            articles = articles.order_by('-published_at')
+        if search_query:
+            # If we have search results, use them
+            articles = search_results
+        else:
+            # Date range filter
+            if date_range != 'all':
+                now = timezone.now()
+                if date_range == 'today':
+                    articles = articles.filter(published_at__date=now.date())
+                elif date_range == 'week':
+                    articles = articles.filter(published_at__gte=now - timedelta(days=7))
+                elif date_range == 'month':
+                    articles = articles.filter(published_at__gte=now - timedelta(days=30))
+            
+            # Tags filter
+            if selected_tags:
+                try:
+                    # Convert string IDs to integers
+                    tag_ids = [int(tag_id) for tag_id in selected_tags]
+                    articles = articles.filter(interests__id__in=tag_ids).distinct()
+                except (ValueError, TypeError):
+                    # If there's an error in conversion, ignore the filter
+                    pass
+            
+            # Sort articles
+            if sort == 'date_asc':
+                articles = articles.order_by('published_at')
+            elif sort == 'relevance':
+                # For non-authenticated users, sort by recency
+                articles = articles.order_by('-published_at')
+            else:  # date_desc
+                articles = articles.order_by('-published_at')
+            
+            # Convert to list after all filtering
+            articles = list(articles)
         
         # Add default reference value for non-authenticated users
         for article in articles:
             article.reference = 0.0
+    
+    print(f"Final article count: {len(articles)}")  # Debug log
     
     # Pagination
     paginator = Paginator(articles, 12)  # Show 12 articles per page
@@ -369,11 +421,15 @@ def custom_sources_view(request):
     if request.method == 'POST':
         form = UserSourceForm(request.POST)
         if form.is_valid():
-            source = form.save(commit=False)
-            source.user = request.user
-            source.save()
-            messages.success(request, 'Источник успешно добавлен!')
-            return redirect('custom_sources')
+            try:
+                source = form.save(commit=False)
+                source.user = request.user
+                source.save()
+                messages.success(request, 'Источник успешно добавлен!')
+                return redirect('custom_sources')
+            except Exception as e:
+                print(f"Error creating source: {str(e)}")  # Debug log
+                messages.error(request, f'Ошибка при создании источника: {str(e)}')
     else:
         form = UserSourceForm()
     
@@ -395,27 +451,62 @@ def delete_source(request, source_id):
 
 @login_required
 def create_article_view(request):
-    """Представление для создания пользовательской статьи"""
     if request.method == 'POST':
         form = CustomArticleForm(request.POST)
+        print(f"Form data: {request.POST}")  # Debug log
         if form.is_valid():
-            article = form.save(commit=False)
-            
-            # Создаем или получаем источник для пользовательских статей
-            source, _ = Source.objects.get_or_create(
-                name=f'Пользовательская статья от {request.user.username}',
-                defaults={
-                    'link': request.build_absolute_uri('/'),
-                    'source_type': 'custom'
-                }
-            )
-            
-            article.source = source
-            article.published_at = timezone.now()
-            article.save()
-            
-            messages.success(request, 'Статья успешно добавлена!')
-            return redirect('main')
+            try:
+                # Get or create source for user articles
+                source, created = Source.objects.get_or_create(
+                    name="Пользовательские статьи",
+                    defaults={
+                        'link': 'https://example.com/user-articles',
+                        'source_type': 'custom'
+                    }
+                )
+                print(f"Source {'created' if created else 'retrieved'}: {source.name} (ID: {source.id})")  # Debug log
+                
+                # Create article with all required fields
+                article = Article(
+                    title=form.cleaned_data['title'],
+                    content=form.cleaned_data['content'],
+                    source=source,
+                    url='https://example.com/temp',  # Temporary URL
+                    published_at=timezone.now()  # Set current time as published_at
+                )
+                print(f"Creating article with title: {article.title}")  # Debug log
+                article.save()
+                print(f"Article saved with ID: {article.id}")  # Debug log
+                
+                # Update URL after saving to include the ID
+                article.url = f'https://example.com/user-articles/{article.id}'
+                article.save()
+                print(f"Article URL updated: {article.url}")  # Debug log
+                
+                # Add default tags
+                default_tags = Interest.objects.filter(name__in=['Пользовательские статьи'])
+                if not default_tags.exists():
+                    default_tags = [Interest.objects.create(
+                        name='Пользовательские статьи',
+                        description='Статьи, созданные пользователями'
+                    )]
+                article.interests.set(default_tags)
+                print(f"Added {len(default_tags)} tags to article")  # Debug log
+                
+                # Verify article was saved
+                saved_article = Article.objects.filter(id=article.id).first()
+                if saved_article:
+                    print(f"Verified article exists in database: {saved_article.title}")
+                else:
+                    print("WARNING: Article not found in database after save!")
+                
+                messages.success(request, 'Статья успешно создана!')
+                return redirect('main')
+            except Exception as e:
+                print(f"Error creating article: {str(e)}")  # Debug log
+                messages.error(request, f'Ошибка при создании статьи: {str(e)}')
+        else:
+            print(f"Form errors: {form.errors}")  # Debug log
     else:
         form = CustomArticleForm()
     
