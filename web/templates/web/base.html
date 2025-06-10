@@ -135,9 +135,13 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'logout' %}">
-                                <i class="fas fa-sign-out-alt me-1"></i>Logout
-                            </a>
+                            <a class="nav-link" href="{% url 'custom_sources' %}">Мои источники</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'create_article' %}">Создать статью</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'logout' %}">Выйти</a>
                         </li>
                     {% else %}
                         <li class="nav-item">

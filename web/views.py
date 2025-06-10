@@ -16,8 +16,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 
-from web.forms import RegistrationForm, AuthForm
-from web.models import User, Article, Interest, Source
+from web.forms import RegistrationForm, AuthForm, UserSourceForm, CustomArticleForm
+from web.models import User, Article, Interest, Source, UserSource
 from .serializers import ArticleSerializer
 from .recommender import NewsRecommender
 from .news_fetcher import NewsFetcher
@@ -53,6 +53,17 @@ def main_view(request):
     sort = request.GET.get('sort', 'date_desc')
     date_range = request.GET.get('date_range', 'all')
     selected_tags = request.GET.getlist('tags')
+    search_query = request.GET.get('search', '').strip()
+    
+    # Base queryset
+    articles = Article.objects.all()
+    
+    # Apply search filter if query exists
+    if search_query:
+        articles = articles.filter(
+            Q(title__icontains=search_query) |
+            Q(content__icontains=search_query)
+        )
     
     # If user is authenticated, use recommender
     if request.user.is_authenticated:
@@ -63,7 +74,7 @@ def main_view(request):
         article_ids = list(article_data.keys())
         
         # Get Article objects and maintain recommendation order
-        articles = Article.objects.filter(id__in=article_ids)
+        articles = articles.filter(id__in=article_ids)
         id_order = {id: idx for idx, id in enumerate(article_ids)}
         articles = sorted(articles, key=lambda x: id_order[x.id])
         
@@ -71,9 +82,6 @@ def main_view(request):
         for article in articles:
             article.reference = article_data[article.id]
     else:
-        # Get all articles
-        articles = Article.objects.all()
-        
         # Date range filter
         if date_range != 'all':
             now = timezone.now()
@@ -355,3 +363,60 @@ def last_24h_view(request):
     }
     
     return render(request, 'web/index.html', context)
+
+@login_required
+def custom_sources_view(request):
+    if request.method == 'POST':
+        form = UserSourceForm(request.POST)
+        if form.is_valid():
+            source = form.save(commit=False)
+            source.user = request.user
+            source.save()
+            messages.success(request, 'Источник успешно добавлен!')
+            return redirect('custom_sources')
+    else:
+        form = UserSourceForm()
+    
+    user_sources = UserSource.objects.filter(user=request.user)
+    return render(request, 'web/custom_sources.html', {
+        'form': form,
+        'sources': user_sources
+    })
+
+@login_required
+def delete_source(request, source_id):
+    try:
+        source = UserSource.objects.get(id=source_id, user=request.user)
+        source.delete()
+        messages.success(request, 'Источник успешно удален!')
+    except UserSource.DoesNotExist:
+        messages.error(request, 'Источник не найден!')
+    return redirect('custom_sources')
+
+@login_required
+def create_article_view(request):
+    """Представление для создания пользовательской статьи"""
+    if request.method == 'POST':
+        form = CustomArticleForm(request.POST)
+        if form.is_valid():
+            article = form.save(commit=False)
+            
+            # Создаем или получаем источник для пользовательских статей
+            source, _ = Source.objects.get_or_create(
+                name=f'Пользовательская статья от {request.user.username}',
+                defaults={
+                    'link': request.build_absolute_uri('/'),
+                    'source_type': 'custom'
+                }
+            )
+            
+            article.source = source
+            article.published_at = timezone.now()
+            article.save()
+            
+            messages.success(request, 'Статья успешно добавлена!')
+            return redirect('main')
+    else:
+        form = CustomArticleForm()
+    
+    return render(request, 'web/create_article.html', {'form': form})

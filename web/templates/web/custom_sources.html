@@ -1,0 +1,103 @@
+{% extends 'web/base.html' %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <h2 class="mb-4">Мои источники новостей</h2>
+            
+            {% if messages %}
+            <div class="messages mb-4">
+                {% for message in messages %}
+                <div class="alert alert-{{ message.tags }}">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Форма добавления источника -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Добавить новый источник</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="{{ form.name.id_for_label }}" class="form-label">Название источника</label>
+                            {{ form.name }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="{{ form.url.id_for_label }}" class="form-label">URL источника</label>
+                            {{ form.url }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="{{ form.source_type.id_for_label }}" class="form-label">Тип источника</label>
+                            {{ form.source_type }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="{{ form.api_key.id_for_label }}" class="form-label">API ключ</label>
+                            {{ form.api_key }}
+                            <div class="form-text">Оставьте пустым, если не требуется</div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Добавить источник</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Список существующих источников -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Мои источники</h5>
+                </div>
+                <div class="card-body">
+                    {% if sources %}
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Название</th>
+                                    <th>URL</th>
+                                    <th>Тип</th>
+                                    <th>Статус</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for source in sources %}
+                                <tr>
+                                    <td>{{ source.name }}</td>
+                                    <td>
+                                        <a href="{{ source.url }}" target="_blank" class="text-truncate d-inline-block" style="max-width: 200px;">
+                                            {{ source.url }}
+                                        </a>
+                                    </td>
+                                    <td>{{ source.get_source_type_display }}</td>
+                                    <td>
+                                        {% if source.is_active %}
+                                        <span class="badge bg-success">Активен</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">Неактивен</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'delete_source' source.id %}" class="btn btn-danger btn-sm" 
+                                           onclick="return confirm('Вы уверены, что хотите удалить этот источник?')">
+                                            <i class="fas fa-trash"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-muted">У вас пока нет добавленных источников.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

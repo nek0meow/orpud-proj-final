@@ -5,145 +5,153 @@
 
 {% block content %}
 <div class="container mt-4">
-    <div class="row">
-        <!-- Фильтры -->
-        <div class="col-md-3">
+    <!-- Поисковая форма -->
+    <div class="row mb-4">
+        <div class="col-md-8 mx-auto">
+            <form method="get" action="{% url 'main' %}" class="d-flex gap-2">
+                <input type="text" name="search" class="form-control" placeholder="Поиск статей..." value="{{ request.GET.search|default:'' }}">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-search"></i> Поиск
+                </button>
+                {% if request.GET.search %}
+                <a href="{% url 'main' %}" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Сбросить
+                </a>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    <!-- Фильтры и сортировка -->
+    <div class="row mb-4">
+        <div class="col-md-12">
             <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Фильтры</h5>
-                </div>
                 <div class="card-body">
-                    <form method="get" class="mb-3">
-                        <div class="mb-3">
-                            <label for="tags" class="form-label">Теги</label>
-                            <select name="tags" id="tags" class="form-select" multiple>
+                    <form method="get" class="row g-3">
+                        <!-- Существующие фильтры -->
+                        <div class="col-md-4">
+                            <label class="form-label">Теги</label>
+                            <select name="tags" multiple class="form-select">
                                 {% for tag in available_tags %}
-                                <option value="{{ tag.id }}" {% if tag.id in selected_tags %}selected{% endif %}>
+                                <option value="{{ tag.id }}" {% if tag.id|stringformat:"i" in selected_tags %}selected{% endif %}>
                                     {{ tag.name }}
                                 </option>
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="mb-3">
-                            <label for="sort" class="form-label">Сортировка</label>
-                            <select name="sort" id="sort" class="form-select">
-                                <option value="newest" {% if current_sort == 'newest' %}selected{% endif %}>Сначала новые</option>
-                                <option value="oldest" {% if current_sort == 'oldest' %}selected{% endif %}>Сначала старые</option>
+                        
+                        <div class="col-md-3">
+                            <label class="form-label">Сортировка</label>
+                            <select name="sort" class="form-select">
+                                <option value="date_desc" {% if current_sort == 'date_desc' %}selected{% endif %}>Сначала новые</option>
+                                <option value="date_asc" {% if current_sort == 'date_asc' %}selected{% endif %}>Сначала старые</option>
                                 <option value="relevance" {% if current_sort == 'relevance' %}selected{% endif %}>По релевантности</option>
                             </select>
                         </div>
-                        <button type="submit" class="btn btn-primary w-100">Применить</button>
+                        
+                        <div class="col-md-3">
+                            <label class="form-label">Период</label>
+                            <select name="date_range" class="form-select">
+                                <option value="all" {% if current_date_range == 'all' %}selected{% endif %}>Все время</option>
+                                <option value="today" {% if current_date_range == 'today' %}selected{% endif %}>Сегодня</option>
+                                <option value="week" {% if current_date_range == 'week' %}selected{% endif %}>За неделю</option>
+                                <option value="month" {% if current_date_range == 'month' %}selected{% endif %}>За месяц</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">Применить</button>
+                        </div>
                     </form>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Список статей -->
-        <div class="col-md-9">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2>Новости</h2>
-                <small class="text-muted">Последнее обновление: {{ last_update|date:"d.m.Y H:i" }}</small>
-            </div>
-
-            {% if is_updating %}
+    <!-- Результаты поиска -->
+    {% if request.GET.search %}
+    <div class="row mb-4">
+        <div class="col-12">
             <div class="alert alert-info">
-                <i class="fas fa-sync fa-spin"></i> Обновление новостей...
+                Результаты поиска по запросу: "{{ request.GET.search }}"
+                <small class="float-end">Найдено статей: {{ articles.paginator.count }}</small>
             </div>
-            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 
-            {% if articles %}
-            <div class="row">
-                {% for article in articles %}
-                <div class="col-md-6 mb-4">
-                    <div class="card h-100">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <h5 class="card-title mb-0">
-                                    <a href="{% url 'article_detail' article.id %}" class="text-decoration-none">
-                                        {{ article.title }}
-                                    </a>
-                                </h5>
-                                <span class="badge bg-primary">Релевантность: {{ article.reference|floatformat:2 }}</span>
-                            </div>
-                            <p class="card-text">{{ article.content|truncatewords:30 }}</p>
-                            <div class="mt-3">
-                                <div class="d-flex flex-wrap gap-2 mb-2">
-                                    {% for tag in article.interests.all %}
-                                    <a href="?tags={{ tag.id }}" class="btn btn-sm btn-outline-primary">
-                                        <i class="fas fa-tag me-1"></i>{{ tag.name }}
-                                    </a>
-                                    {% endfor %}
-                                </div>
-                                <small class="text-muted">{{ article.published_at|date:"d.m.Y H:i" }}</small>
-                            </div>
-                        </div>
+    <!-- Список статей -->
+    <div class="row">
+        {% for article in articles %}
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                {% if article.image_url %}
+                <img src="{{ article.image_url }}" class="card-img-top" alt="{{ article.title }}">
+                {% endif %}
+                <div class="card-body">
+                    <h5 class="card-title">{{ article.title }}</h5>
+                    <p class="card-text">{{ article.content|truncatewords:30 }}</p>
+                    <div class="mb-2">
+                        {% for interest in article.interests.all %}
+                        <span class="badge bg-secondary me-1">{{ interest.name }}</span>
+                        {% endfor %}
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="text-muted">{{ article.published_at|date:"d.m.Y H:i" }}</small>
+                        <a href="{{ article.url }}" class="btn btn-sm btn-outline-primary" target="_blank">Читать</a>
                     </div>
                 </div>
-                {% endfor %}
             </div>
+        </div>
+        {% empty %}
+        <div class="col-12">
+            <div class="alert alert-info">
+                {% if request.GET.search %}
+                По вашему запросу ничего не найдено
+                {% else %}
+                Статьи не найдены
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
 
-            <!-- Пагинация -->
-            {% if articles.has_other_pages %}
-            <nav aria-label="Page navigation" class="mt-4">
+    <!-- Пагинация -->
+    {% if articles.has_other_pages %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <nav aria-label="Page navigation">
                 <ul class="pagination justify-content-center">
                     {% if articles.has_previous %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ articles.previous_page_number }}{% if selected_tags %}&tags={{ selected_tags|join:',' }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}" aria-label="Previous">
+                        <a class="page-link" href="?page={{ articles.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}{% if request.GET.date_range %}&date_range={{ request.GET.date_range }}{% endif %}{% for tag in selected_tags %}&tags={{ tag }}{% endfor %}" aria-label="Previous">
                             <span aria-hidden="true">&laquo;</span>
                         </a>
                     </li>
                     {% endif %}
 
-                    {% with ''|center:articles.paginator.num_pages as range %}
-                    {% for _ in range %}
-                        {% with forloop.counter as page_number %}
-                            {% if page_number == articles.number %}
-                            <li class="page-item active"><span class="page-link">{{ page_number }}</span></li>
-                            {% elif page_number <= 5 or page_number > articles.paginator.num_pages|add:"-4" or page_number|add:"-2" <= articles.number and page_number|add:"2" >= articles.number %}
-                            <li class="page-item">
-                                <a class="page-link" href="?page={{ page_number }}{% if selected_tags %}&tags={{ selected_tags|join:',' }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}">{{ page_number }}</a>
-                            </li>
-                            {% elif page_number == 6 or page_number == articles.paginator.num_pages|add:"-5" %}
-                            <li class="page-item disabled"><span class="page-link">...</span></li>
-                            {% endif %}
-                        {% endwith %}
+                    {% for num in articles.paginator.page_range %}
+                    {% if articles.number == num %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                    {% else %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ num }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}{% if request.GET.date_range %}&date_range={{ request.GET.date_range }}{% endif %}{% for tag in selected_tags %}&tags={{ tag }}{% endfor %}">{{ num }}</a>
+                    </li>
+                    {% endif %}
                     {% endfor %}
-                    {% endwith %}
 
                     {% if articles.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ articles.next_page_number }}{% if selected_tags %}&tags={{ selected_tags|join:',' }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}" aria-label="Next">
+                        <a class="page-link" href="?page={{ articles.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}{% if request.GET.date_range %}&date_range={{ request.GET.date_range }}{% endif %}{% for tag in selected_tags %}&tags={{ tag }}{% endfor %}" aria-label="Next">
                             <span aria-hidden="true">&raquo;</span>
                         </a>
                     </li>
                     {% endif %}
                 </ul>
             </nav>
-            {% endif %}
-
-            <!-- График релевантности -->
-            <div class="row mt-4">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="card-title mb-0">График релевантности статей</h5>
-                        </div>
-                        <div class="card-body">
-                            <div style="height: 400px;">
-                                <canvas id="relevanceChart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {% else %}
-            <div class="alert alert-info">
-                Нет доступных статей.
-            </div>
-            {% endif %}
         </div>
     </div>
+    {% endif %}
 </div>
 {% endblock %}
 

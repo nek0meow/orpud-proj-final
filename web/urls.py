@@ -17,6 +17,9 @@ urlpatterns = [
     path('login/', views.auth_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('register/', views.registration_view, name='register'),
+    path('custom-sources/', views.custom_sources_view, name='custom_sources'),
+    path('custom-sources/delete/<int:source_id>/', views.delete_source, name='delete_source'),
+    path('create-article/', views.create_article_view, name='create_article'),
     # API endpoints:
     path("api/", include(router.urls)),
     path("api/profile/", UserProfileDetailAPI.as_view(), name="api_profile"),

@@ -89,3 +89,25 @@ class UserInteraction(models.Model):
     
     def __str__(self):
         return f"{self.user.username} - {self.article.title} ({self.interaction_type})"
+
+class UserSource(models.Model):
+    SOURCE_TYPES = [
+        ('rss', 'RSS Feed'),
+        ('api', 'API'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='custom_sources')
+    name = models.CharField(max_length=100)
+    url = models.URLField()
+    api_key = models.CharField(max_length=255, blank=True, null=True)
+    source_type = models.CharField(max_length=10, choices=SOURCE_TYPES)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['user', 'url']
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.name} ({self.get_source_type_display()})"
