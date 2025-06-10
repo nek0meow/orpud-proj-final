@@ -269,3 +269,89 @@ class ArticleViewSet(viewsets.ModelViewSet):
                 {"status": "error", "message": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+def about_view(request):
+    return render(request, 'web/about.html')
+
+def last_24h_view(request):
+    """Представление для отображения статей за последние 24 часа"""
+    # Получаем время 24 часа назад
+    yesterday = timezone.now() - timezone.timedelta(days=1)
+    
+    # Получаем статьи за последние 24 часа
+    articles = Article.objects.filter(
+        published_at__gte=yesterday
+    ).select_related('source').prefetch_related('interests')
+    
+    # Получаем доступные теги
+    available_tags = Interest.objects.all()
+    
+    # Применяем фильтры
+    sort = request.GET.get('sort', 'newest')
+    selected_tags = request.GET.getlist('tags')
+    
+    # Если пользователь авторизован, используем рекомендации
+    if request.user.is_authenticated:
+        recommender = NewsRecommender()
+        recommended_articles = recommender.get_recommendations(request.user)
+        # Получаем ID статей и их релевантность
+        article_data = {article['id']: article['score'] for article in recommended_articles}
+        article_ids = list(article_data.keys())
+        
+        # Получаем объекты Article и сохраняем порядок рекомендаций
+        articles = Article.objects.filter(id__in=article_ids)
+        id_order = {id: idx for idx, id in enumerate(article_ids)}
+        articles = sorted(articles, key=lambda x: id_order[x.id])
+        
+        # Добавляем релевантность к статьям
+        for article in articles:
+            article.reference = article_data[article.id]
+    else:
+        # Применяем фильтры по тегам
+        if selected_tags:
+            try:
+                # Convert string IDs to integers
+                tag_ids = [int(tag_id) for tag_id in selected_tags]
+                articles = articles.filter(interests__id__in=tag_ids).distinct()
+            except (ValueError, TypeError):
+                # If there's an error in conversion, ignore the filter
+                pass
+        
+        # Сортировка статей
+        if sort == 'newest':
+            articles = articles.order_by('-published_at')
+        elif sort == 'oldest':
+            articles = articles.order_by('published_at')
+        elif sort == 'relevance':
+            # Для неавторизованных пользователей сортируем по дате
+            articles = articles.order_by('-published_at')
+        
+        # Добавляем релевантность 0 для неавторизованных пользователей
+        for article in articles:
+            article.reference = 0.0
+    
+    # Пагинация - показываем по 12 статей на странице
+    paginator = Paginator(articles, 12)
+    page = request.GET.get('page', 1)
+    try:
+        articles = paginator.page(page)
+    except (PageNotAnInteger, EmptyPage):
+        articles = paginator.page(1)
+    
+    # Добавляем ID тегов к каждой статье
+    for article in articles:
+        article.interest_ids = list(article.interests.values_list('id', flat=True))
+    
+    # Получаем время последнего обновления
+    last_update = Article.objects.order_by('-updated_at').first()
+    last_update_time = last_update.updated_at if last_update else None
+    
+    context = {
+        'articles': articles,
+        'available_tags': available_tags,
+        'selected_tags': selected_tags,
+        'current_sort': sort,
+        'last_update': last_update_time,
+    }
+    
+    return render(request, 'web/index.html', context)

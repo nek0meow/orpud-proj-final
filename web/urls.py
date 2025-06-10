@@ -9,11 +9,14 @@ router.register(r'articles', views.ArticleViewSet)
 
 urlpatterns = [
     path("", views.main_view, name="main"),
-    path("registration/", views.registration_view, name="registration"),
     path("auth/", views.auth_view, name="auth"),
-    path("logout/", views.logout_view, name="logout"),
     path("profile/", views.profile_view, name="profile"),
     path("article/<int:article_id>/", views.article_detail, name="article_detail"),
+    path("about/", views.about_view, name="about"),
+    path("last-24h/", views.last_24h_view, name="last_24h"),
+    path('login/', views.auth_view, name='login'),
+    path('logout/', views.logout_view, name='logout'),
+    path('register/', views.registration_view, name='register'),
     # API endpoints:
     path("api/", include(router.urls)),
     path("api/profile/", UserProfileDetailAPI.as_view(), name="api_profile"),

@@ -94,15 +94,21 @@
                     </li>
                     {% endif %}
 
-                    {% for num in articles.paginator.page_range %}
-                    {% if articles.number == num %}
-                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-                    {% else %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ num }}{% if selected_tags %}&tags={{ selected_tags|join:',' }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}">{{ num }}</a>
-                    </li>
-                    {% endif %}
+                    {% with ''|center:articles.paginator.num_pages as range %}
+                    {% for _ in range %}
+                        {% with forloop.counter as page_number %}
+                            {% if page_number == articles.number %}
+                            <li class="page-item active"><span class="page-link">{{ page_number }}</span></li>
+                            {% elif page_number <= 5 or page_number > articles.paginator.num_pages|add:"-4" or page_number|add:"-2" <= articles.number and page_number|add:"2" >= articles.number %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_number }}{% if selected_tags %}&tags={{ selected_tags|join:',' }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}">{{ page_number }}</a>
+                            </li>
+                            {% elif page_number == 6 or page_number == articles.paginator.num_pages|add:"-5" %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                            {% endif %}
+                        {% endwith %}
                     {% endfor %}
+                    {% endwith %}
 
                     {% if articles.has_next %}
                     <li class="page-item">
@@ -116,12 +122,18 @@
             {% endif %}
 
             <!-- График релевантности -->
-            <div class="card mt-4">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">График релевантности статей</h5>
-                </div>
-                <div class="card-body">
-                    <canvas id="relevanceChart"></canvas>
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">График релевантности статей</h5>
+                        </div>
+                        <div class="card-body">
+                            <div style="height: 400px;">
+                                <canvas id="relevanceChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
