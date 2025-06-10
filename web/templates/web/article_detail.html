@@ -1,0 +1,48 @@
+{% extends 'base/base.html' %}
+{% load static %}
+
+{% block title %}{{ article.title }} - Новостной агрегатор{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-body">
+                    <h1 class="card-title mb-4">{{ article.title }}</h1>
+                    
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <div>
+                            <span class="badge bg-primary me-2">Релевантность: {{ article.reference|floatformat:2 }}</span>
+                            <small class="text-muted">{{ article.published_at|date:"d.m.Y H:i" }}</small>
+                        </div>
+                        <a href="{{ article.url }}" target="_blank" class="btn btn-outline-primary">
+                            <i class="fas fa-external-link-alt me-1"></i>Перейти к оригиналу
+                        </a>
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="d-flex flex-wrap gap-2">
+                            {% for tag in article.interests.all %}
+                            <a href="{% url 'main' %}?tags={{ tag.id }}" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-tag me-1"></i>{{ tag.name }}
+                            </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="article-content">
+                        {{ article.content|linebreaks }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <a href="{% url 'main' %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left me-1"></i>Вернуться к списку статей
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

@@ -1,6 +1,6 @@
 from django.contrib.auth import logout, authenticate, login
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponseRedirect, JsonResponse
 from django.core.paginator import Paginator
 from django.utils import timezone
@@ -130,6 +130,10 @@ def main_view(request):
     }
     
     return render(request, 'web/index.html', context)
+
+def article_detail(request, article_id):
+    article = get_object_or_404(Article, id=article_id)
+    return render(request, 'web/article_detail.html', {'article': article})
 
 def registration_view(request):
     form = RegistrationForm()
