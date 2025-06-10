@@ -6,9 +6,26 @@
 {% block content %}
 <div class="row">
     <div class="col-12 mb-4">
-        <h2 class="display-5 fw-bold text-center mb-4">Latest News</h2>
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="display-5 fw-bold mb-0">Latest News</h2>
+                {% if last_update %}
+                <small class="text-muted">
+                    Last updated: {{ last_update|date:"d.m.Y H:i:s" }}
+                </small>
+                {% endif %}
+            </div>
+            <div>
+                <span id="updateStatus" class="text-muted me-3" style="display: none;">
+                    <i class="fas fa-spinner fa-spin"></i> Updating news...
+                </span>
+                <button id="refreshNews" class="btn btn-primary">
+                    <i class="fas fa-sync-alt me-1"></i>Refresh News
+                </button>
+            </div>
+        </div>
         {% if user.is_authenticated %}
-            <div class="alert alert-info text-center">
+            <div class="alert alert-info text-center mt-3">
                 <h4 class="alert-heading">AI Recommendations Active</h4>
                 <p class="mb-0">
                     Showing personalized recommendations based on your interests:
@@ -186,6 +203,42 @@
             allowClear: true,
             theme: "bootstrap-5"
         });
+
+        // Show update status on page load
+        $('#updateStatus').show();
+
+        // Handle refresh button click
+        $('#refreshNews').click(function() {
+            const button = $(this);
+            const status = $('#updateStatus');
+            
+            button.prop('disabled', true);
+            status.show();
+
+            $.ajax({
+                url: '/api/articles/refresh/',
+                method: 'GET',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        location.reload();
+                    } else {
+                        alert('Error refreshing news: ' + response.message);
+                        button.prop('disabled', false);
+                        status.hide();
+                    }
+                },
+                error: function(xhr) {
+                    alert('Error refreshing news. Please try again later.');
+                    button.prop('disabled', false);
+                    status.hide();
+                }
+            });
+        });
+
+        // Hide update status after 5 seconds
+        setTimeout(function() {
+            $('#updateStatus').fadeOut();
+        }, 5000);
     });
 </script>
 {% endblock %}

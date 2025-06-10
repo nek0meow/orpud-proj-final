@@ -17,6 +17,7 @@ class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     interests = models.ManyToManyField(Interest, blank=True)
     custom_tags = models.JSONField(default=list, blank=True)  # Для пользовательских тегов
+    telegram_id = models.BigIntegerField(null=True, blank=True, unique=True)
 
     def __str__(self):
         return f"{self.user.username}'s profile"

@@ -5,16 +5,47 @@ from django.http import HttpResponseRedirect, JsonResponse
 from django.core.paginator import Paginator
 from django.utils import timezone
 from datetime import timedelta
+from django.contrib import messages
+import threading
+from django.db.models import Q
+from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import csrf_exempt
+from django.db.models import Case, When, Value, FloatField
+from rest_framework import viewsets, permissions, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 
 from web.forms import RegistrationForm, AuthForm
 from web.models import User, Article, Interest, Source
-from rest_framework import viewsets
-from rest_framework.decorators import action
-from rest_framework.response import Response
 from .serializers import ArticleSerializer
 from .recommender import NewsRecommender
+from .news_fetcher import NewsFetcher
+
+def fetch_news_async():
+    """Fetch news from all APIs in background"""
+    def _fetch():
+        try:
+            fetcher = NewsFetcher()
+            fetcher.fetch_all_news()
+        except Exception as e:
+            print(f"Error fetching news: {e}")
+    
+    thread = threading.Thread(target=_fetch)
+    thread.daemon = True
+    thread.start()
+
+class ArticlePagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 def main_view(request):
+    # Start news fetching in background
+    thread = threading.Thread(target=fetch_news_async)
+    thread.daemon = True
+    thread.start()
+    
     # Get available tags
     available_tags = Interest.objects.all()
     
@@ -81,12 +112,17 @@ def main_view(request):
     for article in articles:
         article.interest_ids = list(article.interests.values_list('id', flat=True))
 
+    # Get last update time
+    last_update = Article.objects.order_by('-updated_at').first()
+    last_update_time = last_update.updated_at if last_update else None
+
     context = {
         'articles': articles,
         'available_tags': available_tags,
         'selected_tags': selected_tags,
         'current_sort': sort,
         'current_date_range': date_range,
+        'last_update': last_update_time,
     }
     
     return render(request, 'web/main.html', context)
@@ -146,23 +182,82 @@ def profile_view(request):
         'custom_tags': ', '.join(profile.custom_tags) if profile.custom_tags else ''
     })
 
-class ArticleViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Article.objects.all().order_by('-published_at')
+class ArticleViewSet(viewsets.ModelViewSet):
+    queryset = Article.objects.all()
     serializer_class = ArticleSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    pagination_class = ArticlePagination
+    filterset_fields = ['source', 'category', 'tags']
+    search_fields = ['title', 'content']
+    ordering_fields = ['published_at', 'relevance_score']
+    ordering = ['-published_at']
 
-    @action(detail=False, methods=['get'])
-    def all_json(self, request):
-        """Получить все статьи в формате JSON"""
-        articles = self.get_queryset()
-        serializer = self.get_serializer(articles, many=True)
-        return Response({"articles": serializer.data})
+    def get_queryset(self):
+        queryset = Article.objects.all()
+        
+        # Apply tag filtering if tags are provided
+        tags = self.request.query_params.getlist('tags', [])
+        if tags:
+            queryset = queryset.filter(tags__name__in=tags).distinct()
+        
+        # Apply sorting
+        ordering = self.request.query_params.get('ordering', '-published_at')
+        if ordering == 'relevance' and self.request.user.is_authenticated:
+            # Get recommendations for the user
+            recommender = NewsRecommender()
+            recommended_articles = recommender.get_recommendations(self.request.user)
+            
+            # Create a dictionary mapping article IDs to their scores
+            article_scores = {article['id']: article['score'] for article in recommended_articles}
+            
+            # Annotate the queryset with relevance scores
+            queryset = queryset.annotate(
+                relevance_score=Case(
+                    *[When(id=article_id, then=Value(score)) for article_id, score in article_scores.items()],
+                    default=Value(0.0),
+                    output_field=FloatField(),
+                )
+            )
+            ordering = '-relevance_score'
+        
+        return queryset.order_by(ordering)
 
     @action(detail=False, methods=['get'])
     def recommendations(self, request):
-        """Получить персонализированные рекомендации"""
         if not request.user.is_authenticated:
-            return Response({"error": "Authentication required"}, status=401)
+            return Response(
+                {"error": "Authentication required for recommendations"},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
         
         recommender = NewsRecommender()
         recommendations = recommender.get_recommendations(request.user)
-        return Response({"articles": recommendations})
+        
+        # Get the articles in the recommended order
+        article_ids = [rec['id'] for rec in recommendations]
+        articles = Article.objects.filter(id__in=article_ids)
+        
+        # Create a mapping of article IDs to their order
+        id_to_order = {id: idx for idx, id in enumerate(article_ids)}
+        
+        # Sort the articles according to the recommendations
+        articles = sorted(articles, key=lambda x: id_to_order[x.id])
+        
+        # Add relevance scores to the articles
+        for article, rec in zip(articles, recommendations):
+            article.relevance_score = rec['score']
+        
+        serializer = self.get_serializer(articles, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def refresh(self, request):
+        try:
+            # Start news fetching in background
+            fetch_news_async()
+            return Response({"status": "success", "message": "News refresh started"})
+        except Exception as e:
+            return Response(
+                {"status": "error", "message": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

@@ -43,7 +43,7 @@ class NewsRecommender:
         # Fit and transform the vectorizer on all articles
         return self.vectorizer.fit_transform(texts)
 
-    def get_recommendations(self, user, limit=10):
+    def get_recommendations(self, user, limit=100):
         """Get personalized news recommendations for a user"""
         # Get user interests
         user_interests = self._get_user_interests(user)
